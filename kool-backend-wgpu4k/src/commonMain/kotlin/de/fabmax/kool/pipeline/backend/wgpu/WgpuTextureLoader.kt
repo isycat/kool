@@ -5,12 +5,11 @@ import de.fabmax.kool.pipeline.*
 import de.fabmax.kool.pipeline.Texture
 import de.fabmax.kool.pipeline.backend.gl.pxSize
 import de.fabmax.kool.util.logW
+import de.fabmax.kool.util.releaseDelayed
 import io.ygdrasil.webgpu.*
 
 
 internal class WgpuTextureLoader(val backend: GPUBackend) {
-    private val loadedTextures = mutableMapOf<String, WgpuTextureResource>()
-
     private val device: GPUDevice get() = backend.device
     private val multiSampledDepthTextureCopy = MultiSampledDepthTextureCopy()
     val mipmapGenerator = MipmapGenerator()
@@ -23,23 +22,20 @@ internal class WgpuTextureLoader(val backend: GPUBackend) {
             "Image data format doesn't match texture format: ${data.format} != ${tex.format}"
         }
 
-        var loaded = loadedTextures[data.id]
-        if (loaded != null && loaded.isReleased) { loadedTextures -= data.id }
-        loaded = loadedTextures.getOrPut(data.id) {
-            when (tex) {
-                is Texture1d if data is ImageData1d -> loadTexture1d(tex, data)
-                is Texture2d if data is ImageData2d -> loadTexture2d(tex, data)
-                is Texture3d if data is ImageData3d -> loadTexture3d(tex, data)
-                is TextureCube if data is ImageDataCube -> loadTextureCube(tex, data)
-                is Texture2dArray if data is ImageData3d -> loadTexture2dArray(tex, data)
-                is TextureCubeArray if data is ImageDataCubeArray -> loadTextureCubeArray(tex, data)
-                else -> error("Invalid texture / image data combination: ${tex::class.simpleName} / ${data::class.simpleName}")
-            }
+        // Each texture owns its GPU image, even where another holds the same data: releasing one never frees an
+        // image another texture still draws with.
+        val loaded = when (tex) {
+            is Texture1d if data is ImageData1d -> loadTexture1d(tex, data)
+            is Texture2d if data is ImageData2d -> loadTexture2d(tex, data)
+            is Texture3d if data is ImageData3d -> loadTexture3d(tex, data)
+            is TextureCube if data is ImageDataCube -> loadTextureCube(tex, data)
+            is Texture2dArray if data is ImageData3d -> loadTexture2dArray(tex, data)
+            is TextureCubeArray if data is ImageDataCubeArray -> loadTextureCubeArray(tex, data)
+            else -> error("Invalid texture / image data combination: ${tex::class.simpleName} / ${data::class.simpleName}")
         }
-        if (loaded !== tex.gpuTexture) {
-            tex.gpuTexture?.release()
-            tex.gpuTexture = loaded
-        }
+        // The image replaced may still be used by a frame being recorded or drawn: freed as a released texture's is.
+        tex.gpuTexture?.releaseDelayed(1)
+        tex.gpuTexture = loaded
     }
 
     private fun loadTexture1d(tex: Texture1d, data: ImageData1d): WgpuTextureResource {

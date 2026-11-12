@@ -1,16 +1,10 @@
 package de.fabmax.kool.pipeline.backend.gl
 
-import de.fabmax.kool.KoolSystem
 import de.fabmax.kool.math.numMipLevels
 import de.fabmax.kool.pipeline.*
+import de.fabmax.kool.util.releaseDelayed
 
 object TextureLoaderGl {
-    private val loadedTextures = mutableMapOf<String, LoadedTextureGl>()
-
-    init {
-        KoolSystem.getContextOrNull()?.onShutdown += { loadedTextures.clear() }
-    }
-
     fun loadTexture(tex: Texture<*>, backend: RenderBackendGl): LoadedTextureGl {
         val data = checkNotNull(tex.uploadData)
         tex.uploadData = null
@@ -19,23 +13,20 @@ object TextureLoaderGl {
             "Image data format doesn't match texture format: ${data.format} != ${tex.format}"
         }
 
-        var loaded = loadedTextures[data.id]
-        if (loaded != null && loaded.isReleased) { loadedTextures -= data.id }
-        loaded = loadedTextures.getOrPut(data.id) {
-            when (tex) {
-                is Texture1d if data is ImageData1d -> loadTexture1dCompat(tex, data, backend)
-                is Texture2d if data is ImageData2d -> loadTexture2d(tex, data, backend)
-                is Texture3d if data is ImageData3d -> loadTexture3d(tex, data, backend)
-                is TextureCube if data is ImageDataCube -> loadTextureCube(tex, data, backend)
-                is Texture2dArray if data is ImageData3d -> loadTexture2dArray(tex, data, backend)
-                is TextureCubeArray if data is ImageDataCubeArray -> loadTextureCubeArray(tex, data, backend)
-                else -> error("Invalid texture / image data combination: ${tex::class.simpleName} / ${data::class.simpleName}")
-            }
+        // Each texture owns its GPU image, even where another holds the same data: releasing one never frees an
+        // image another texture still draws with.
+        val loaded = when (tex) {
+            is Texture1d if data is ImageData1d -> loadTexture1dCompat(tex, data, backend)
+            is Texture2d if data is ImageData2d -> loadTexture2d(tex, data, backend)
+            is Texture3d if data is ImageData3d -> loadTexture3d(tex, data, backend)
+            is TextureCube if data is ImageDataCube -> loadTextureCube(tex, data, backend)
+            is Texture2dArray if data is ImageData3d -> loadTexture2dArray(tex, data, backend)
+            is TextureCubeArray if data is ImageDataCubeArray -> loadTextureCubeArray(tex, data, backend)
+            else -> error("Invalid texture / image data combination: ${tex::class.simpleName} / ${data::class.simpleName}")
         }
-        if (loaded !== tex.gpuTexture) {
-            tex.gpuTexture?.release()
-            tex.gpuTexture = loaded
-        }
+        // The image replaced may still be used by a frame being recorded or drawn: freed as a released texture's is.
+        tex.gpuTexture?.releaseDelayed(1)
+        tex.gpuTexture = loaded
         return loaded
     }
 
