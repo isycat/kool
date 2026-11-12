@@ -133,6 +133,16 @@ class SwingWindowSubsystem(
         }
     }
 
+    /**
+     * Renders a single frame into the canvas, for applications that render when they have something new to show
+     * rather than in a loop. Must be called from the thread the context was created on.
+     */
+    suspend fun renderFrame() {
+        val window = checkNotNull(canvasWrapper) { "No canvas yet: the context was not created" }
+        window.pollEvents()
+        (KoolSystem.requireContext() as Lwjgl3Context).renderFrame()
+    }
+
     override fun runRenderLoop() {
         if (canvasWrapper?.canvas is KoolGlCanvas) {
             glRenderLoop()

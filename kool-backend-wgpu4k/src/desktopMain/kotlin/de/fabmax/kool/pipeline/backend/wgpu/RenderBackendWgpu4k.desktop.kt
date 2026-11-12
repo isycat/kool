@@ -79,12 +79,16 @@ private suspend fun canvasBackend(ctx: KoolContext, wgpu: WGPU, swing: SwingWind
     check(OsInfo.os == OsInfo.OS.WINDOWS) { "The wgpu backend renders into an AWT canvas on Windows only" }
     check(canvas.isDisplayable) { "The canvas has no native window yet: add it to a showing window first" }
     val window = swing.createWindow(ClientApi.UNMANAGED, null, ctx as Lwjgl3Context)
-    val hwnd = Native.getComponentPointer(canvas).toNativeAddress()
     val hinstance = Kernel32.INSTANCE.GetModuleHandle(null).pointer.toNativeAddress()
-    val nativeSurface = wgpu.getSurfaceFromWindows(hinstance, hwnd) ?: error("fail to get surface of the canvas")
-    val adapter = wgpu.requestAdapter(nativeSurface) ?: error("fail to get adapter")
-    nativeSurface.computeSurfaceCapabilities(adapter)
-    return DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(WindowTarget(nativeSurface, window)), KoolSystem.configJvm.numSamples) { adapter }
+    var adapter: io.ygdrasil.webgpu.Adapter? = null
+    val target = FollowingTarget(window, { Pointer.nativeValue(Native.getComponentPointer(canvas)) }) { hwnd ->
+        val surface = wgpu.getSurfaceFromWindows(hinstance, hwnd.toNativeAddress()) ?: error("fail to get surface of the canvas")
+        val compatible = adapter ?: runBlocking { wgpu.requestAdapter(surface) }.also { adapter = it } ?: error("fail to get adapter")
+        // Get supported format and opacity on surface
+        surface.computeSurfaceCapabilities(compatible)
+        surface
+    }
+    return DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(target), KoolSystem.configJvm.numSamples) { checkNotNull(adapter) }
 }
 
 /** Renders without a window: into an offscreen texture, read back for the headless subsystem's listeners. */

@@ -47,7 +47,57 @@ actual class WgpuSurface internal constructor(internal val target: SurfaceTarget
     actual override fun close() = target.close()
 }
 
-/** A window's surface: a GLFW window's, or an AWT canvas's. */
+/**
+ * The surface of whatever native window [handleOf] names now, made by [surfaceOf]: an AWT canvas gets another native
+ * window when it is taken out of its window and put back, and the surface is then made again and configured as it was.
+ */
+internal class FollowingTarget(
+    override val window: KoolWindowJvm,
+    private val handleOf: () -> Long,
+    private val surfaceOf: (Long) -> NativeSurface,
+) : SurfaceTarget {
+    private var handle = handleOf()
+    private var handler = surfaceOf(handle)
+    private var configured: Triple<SurfaceConfiguration, UInt, UInt>? = null
+    private var currentTexture: SurfaceTexture? = null
+
+    private fun current(): NativeSurface {
+        val now = handleOf()
+        if (now != handle) {
+            currentTexture?.texture?.close()
+            currentTexture = null
+            handler.close()
+            handle = now
+            handler = surfaceOf(now)
+            configured?.let { (configuration, width, height) -> handler.configure(configuration, width, height) }
+        }
+        return handler
+    }
+
+    override val supportedAlphaMode: Set<CompositeAlphaMode> get() = handler.supportedAlphaMode
+    override val format: GPUTextureFormat
+        get() = handler.supportedFormats.firstOrNull {
+            it.name.contains("8Unorm") && !it.name.contains("Srgb")
+        } ?: handler.supportedFormats.first()
+
+    override fun getCurrentTexture(): GPUTexture =
+        (currentTexture ?: current().getCurrentTexture().also { currentTexture = it }).texture
+
+    override suspend fun present() {
+        handler.present()
+        currentTexture?.texture?.close()
+        currentTexture = null
+    }
+
+    override fun configure(surfaceConfiguration: SurfaceConfiguration, width: UInt, height: UInt) {
+        configured = Triple(surfaceConfiguration, width, height)
+        current().configure(surfaceConfiguration, width, height)
+    }
+
+    override fun close() = handler.close()
+}
+
+/** A window's surface: a GLFW window's. */
 internal class WindowTarget(private val handler: NativeSurface, override val window: KoolWindowJvm) : SurfaceTarget {
 
     override val supportedAlphaMode: Set<CompositeAlphaMode> get() = handler.supportedAlphaMode
