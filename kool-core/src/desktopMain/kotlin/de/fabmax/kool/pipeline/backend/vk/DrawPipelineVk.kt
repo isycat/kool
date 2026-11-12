@@ -126,10 +126,12 @@ class DrawPipelineVk(
             lineWidth(drawPipeline.lineWidth.clamp(backend.physicalDevice.minLineWidth, backend.physicalDevice.maxLineWidth))
             cullMode(drawPipeline.cullMethod.vk)
             frontFace(if (renderPass.isMirrorY) VK_FRONT_FACE_CLOCKWISE else VK_FRONT_FACE_COUNTER_CLOCKWISE)
-            depthBiasEnable(false)
-            depthBiasConstantFactor(0f)
+            val config = drawPipeline.pipelineConfig
+            val away = if (renderPass.depthMode == DepthMode.Reversed) -1f else 1f
+            depthBiasEnable(config.depthBias != 0f || config.depthBiasSlope != 0f)
+            depthBiasConstantFactor(config.depthBias * away)
             depthBiasClamp(0f)
-            depthBiasSlopeFactor(0f)
+            depthBiasSlopeFactor(config.depthBiasSlope * away)
         }
 
         val depthOp = when {
