@@ -1,5 +1,6 @@
 package de.fabmax.kool.pipeline.backend.wgpu
 
+import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.platform.win32.Kernel32
 import darwin.CAMetalLayer
@@ -17,6 +18,7 @@ import de.fabmax.kool.platform.glfw.GlfwWindowSubsystem
 import de.fabmax.kool.platform.KoolWindowJvm
 import de.fabmax.kool.platform.headless.HeadlessWindow
 import de.fabmax.kool.platform.headless.HeadlessWindowSubsystem
+import de.fabmax.kool.platform.swing.SwingWindowSubsystem
 import de.fabmax.kool.util.logD
 import ffi.LibraryLoader
 import ffi.NativeAddress
@@ -44,7 +46,8 @@ internal actual suspend fun createRenderBackendWgpu4k(ctx: KoolContext): RenderB
     return when (val subsystem = KoolSystem.configJvm.windowSubsystem) {
         is HeadlessWindowSubsystem -> headlessBackend(ctx, wgpu, subsystem)
         is GlfwWindowSubsystem -> windowBackend(ctx, wgpu, subsystem)
-        else -> error("Wgpu backend requires the GLFW or the headless window subsystem")
+        is SwingWindowSubsystem -> canvasBackend(ctx, wgpu, subsystem)
+        else -> error("Wgpu backend requires the GLFW, the Swing or the headless window subsystem")
     }
 }
 
@@ -65,6 +68,23 @@ private suspend fun windowBackend(ctx: KoolContext, wgpu: WGPU, glfw: GlfwWindow
     nativeSurface.computeSurfaceCapabilities(adapter)
 
     return DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(WindowTarget(nativeSurface, glfwWindow)), KoolSystem.configJvm.numSamples) { adapter }
+}
+
+/**
+ * Renders into an AWT canvas the application provides ([SwingWindowSubsystem.providedCanvas]), which must be showing:
+ * its native window is the surface, so frames are presented by the GPU with nothing read back.
+ */
+private suspend fun canvasBackend(ctx: KoolContext, wgpu: WGPU, swing: SwingWindowSubsystem): RenderBackendWgpu4k {
+    val canvas = checkNotNull(swing.providedCanvas) { "The wgpu backend renders into a canvas the application provides" }
+    check(OsInfo.os == OsInfo.OS.WINDOWS) { "The wgpu backend renders into an AWT canvas on Windows only" }
+    check(canvas.isDisplayable) { "The canvas has no native window yet: add it to a showing window first" }
+    val window = swing.createWindow(ClientApi.UNMANAGED, null, ctx as Lwjgl3Context)
+    val hwnd = Native.getComponentPointer(canvas).toNativeAddress()
+    val hinstance = Kernel32.INSTANCE.GetModuleHandle(null).pointer.toNativeAddress()
+    val nativeSurface = wgpu.getSurfaceFromWindows(hinstance, hwnd) ?: error("fail to get surface of the canvas")
+    val adapter = wgpu.requestAdapter(nativeSurface) ?: error("fail to get adapter")
+    nativeSurface.computeSurfaceCapabilities(adapter)
+    return DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(WindowTarget(nativeSurface, window)), KoolSystem.configJvm.numSamples) { adapter }
 }
 
 /** Renders without a window: into an offscreen texture, read back for the headless subsystem's listeners. */

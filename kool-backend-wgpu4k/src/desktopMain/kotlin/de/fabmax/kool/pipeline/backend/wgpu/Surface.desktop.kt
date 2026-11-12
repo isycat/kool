@@ -1,7 +1,6 @@
 package de.fabmax.kool.pipeline.backend.wgpu
 
 import de.fabmax.kool.platform.KoolWindowJvm
-import de.fabmax.kool.platform.glfw.GlfwWindow
 import io.ygdrasil.webgpu.*
 
 /**
@@ -48,9 +47,8 @@ actual class WgpuSurface internal constructor(internal val target: SurfaceTarget
     actual override fun close() = target.close()
 }
 
-/** A GLFW window's surface. */
-internal class WindowTarget(private val handler: NativeSurface, val glfwWindow: GlfwWindow) : SurfaceTarget {
-    override val window: KoolWindowJvm get() = glfwWindow
+/** A window's surface: a GLFW window's, or an AWT canvas's. */
+internal class WindowTarget(private val handler: NativeSurface, override val window: KoolWindowJvm) : SurfaceTarget {
 
     override val supportedAlphaMode: Set<CompositeAlphaMode> get() = handler.supportedAlphaMode
     override val format: GPUTextureFormat
