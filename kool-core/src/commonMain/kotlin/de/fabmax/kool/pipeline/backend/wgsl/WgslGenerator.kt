@@ -390,6 +390,7 @@ class WgslGenerator private constructor(
     override fun opDeclareVar(op: KslDeclareVar): String {
         val state = op.declareVar
         val initExpr = op.initExpression?.generateExpression() ?: "${state.expressionType.wgslTypeName()}()"
+        generatorState.declareLocal(state)
         return "var ${getStateName(state)} = ${initExpr};"
     }
 
@@ -398,9 +399,12 @@ class WgslGenerator private constructor(
         val typeName = array.expressionType.wgslTypeName()
 
         return if (op.elements.size == 1 && op.elements[0].expressionType == array.expressionType) {
-            "var ${getStateName(array)} = ${op.elements[0].generateExpression()};"
+            val initExpr = op.elements[0].generateExpression()
+            generatorState.declareLocal(array)
+            "var ${getStateName(array)} = ${initExpr};"
         } else {
             val initExpr = op.elements.joinToString { it.generateExpression() }
+            generatorState.declareLocal(array)
             "var ${getStateName(array)} = ${typeName}(${initExpr});"
         }
     }
@@ -465,6 +469,7 @@ class WgslGenerator private constructor(
         val func = op.function
         return buildString {
             val returnType = if (func.returnType == KslTypeVoid) "" else " -> ${func.returnType.wgslTypeName()}"
+            func.parameters.forEach { generatorState.declareLocal(it) }
             val params = func.parameters.joinToString { p ->
                 if (p.expressionType is KslSamplerType<*>) {
                     val (samplerType, texType) = p.expressionType.wgslSamplerAndTextureTypeName()
@@ -820,6 +825,13 @@ class WgslGenerator private constructor(
 
         val nameMap = mutableMapOf<String, String>()
 
+        /** The variables and parameters declared in functions: named as they are, never as a uniform buffer's member. */
+        private val locals = mutableListOf<KslState>()
+
+        fun declareLocal(state: KslState) {
+            if (state.stateName in nameMap && locals.none { it === state }) locals += state
+        }
+
         init {
             groupLayouts.asList.forEach { layout ->
                 layout.bindings
@@ -841,6 +853,10 @@ class WgslGenerator private constructor(
          * their matrix form locally.
          */
         fun getVarName(state: KslState): String {
+            // A variable declared in a function is itself, even where a uniform buffer has a member of its name.
+            if (locals.any { it === state }) {
+                return state.stateName
+            }
             if (state.stateName in nameMap) {
                 return nameMap[state.stateName]!!
             }

@@ -153,9 +153,9 @@ class WgpuBindGroupData(
 
         val sampler = device.createSampler(
             addressModeU = samplerSettings.addressModeU.wgpu,
-            magFilter = samplerSettings.magFilter.wgpu,
-            minFilter = samplerSettings.minFilter.wgpu,
-            mipmapFilter = samplerSettings.mipFilter.wgpuMipFilter(tex.mipMapping.isMipMapped),
+            magFilter = samplerSettings.magFilter.forBinding(layout.sampleType).wgpu,
+            minFilter = samplerSettings.minFilter.forBinding(layout.sampleType).wgpu,
+            mipmapFilter = samplerSettings.mipFilter.forBinding(layout.sampleType).wgpuMipFilter(tex.mipMapping.isMipMapped),
         )
 
         textureBindings += TextureBinding(this, loadedTex)
@@ -179,9 +179,9 @@ class WgpuBindGroupData(
         val sampler = device.createSampler(
             addressModeU = samplerSettings.addressModeU.wgpu,
             addressModeV = samplerSettings.addressModeV.wgpu,
-            magFilter = samplerSettings.magFilter.wgpu,
-            minFilter = samplerSettings.minFilter.wgpu,
-            mipmapFilter = samplerSettings.mipFilter.wgpuMipFilter(tex.mipMapping.isMipMapped),
+            magFilter = samplerSettings.magFilter.forBinding(layout.sampleType).wgpu,
+            minFilter = samplerSettings.minFilter.forBinding(layout.sampleType).wgpu,
+            mipmapFilter = samplerSettings.mipFilter.forBinding(layout.sampleType).wgpuMipFilter(tex.mipMapping.isMipMapped),
             maxAnisotropy = maxAnisotropy,
             compare = compare,
         )
@@ -209,9 +209,9 @@ class WgpuBindGroupData(
             addressModeU = samplerSettings.addressModeU.wgpu,
             addressModeV = samplerSettings.addressModeV.wgpu,
             addressModeW = samplerSettings.addressModeW.wgpu,
-            magFilter = samplerSettings.magFilter.wgpu,
-            minFilter = samplerSettings.minFilter.wgpu,
-            mipmapFilter = samplerSettings.mipFilter.wgpuMipFilter(tex.mipMapping.isMipMapped),
+            magFilter = samplerSettings.magFilter.forBinding(layout.sampleType).wgpu,
+            minFilter = samplerSettings.minFilter.forBinding(layout.sampleType).wgpu,
+            mipmapFilter = samplerSettings.mipFilter.forBinding(layout.sampleType).wgpuMipFilter(tex.mipMapping.isMipMapped),
         )
 
         textureBindings += TextureBinding(this, loadedTex)
@@ -231,9 +231,9 @@ class WgpuBindGroupData(
         val sampler = device.createSampler(
             addressModeU = samplerSettings.addressModeU.wgpu,
             addressModeV = samplerSettings.addressModeV.wgpu,
-            magFilter = samplerSettings.magFilter.wgpu,
-            minFilter = samplerSettings.minFilter.wgpu,
-            mipmapFilter = samplerSettings.mipFilter.wgpuMipFilter(tex.mipMapping.isMipMapped),
+            magFilter = samplerSettings.magFilter.forBinding(layout.sampleType).wgpu,
+            minFilter = samplerSettings.minFilter.forBinding(layout.sampleType).wgpu,
+            mipmapFilter = samplerSettings.mipFilter.forBinding(layout.sampleType).wgpuMipFilter(tex.mipMapping.isMipMapped),
             compare = compare,
         )
 
@@ -258,9 +258,9 @@ class WgpuBindGroupData(
         val sampler = device.createSampler(
             addressModeU = samplerSettings.addressModeU.wgpu,
             addressModeV = samplerSettings.addressModeV.wgpu,
-            magFilter = samplerSettings.magFilter.wgpu,
-            minFilter = samplerSettings.minFilter.wgpu,
-            mipmapFilter = samplerSettings.mipFilter.wgpuMipFilter(tex.mipMapping.isMipMapped),
+            magFilter = samplerSettings.magFilter.forBinding(layout.sampleType).wgpu,
+            minFilter = samplerSettings.minFilter.forBinding(layout.sampleType).wgpu,
+            mipmapFilter = samplerSettings.mipFilter.forBinding(layout.sampleType).wgpuMipFilter(tex.mipMapping.isMipMapped),
             maxAnisotropy = maxAnisotropy,
             compare = compare,
         )
@@ -282,9 +282,9 @@ class WgpuBindGroupData(
         val sampler = device.createSampler(
             addressModeU = samplerSettings.addressModeU.wgpu,
             addressModeV = samplerSettings.addressModeV.wgpu,
-            magFilter = samplerSettings.magFilter.wgpu,
-            minFilter = samplerSettings.minFilter.wgpu,
-            mipmapFilter = samplerSettings.mipFilter.wgpuMipFilter(tex.mipMapping.isMipMapped),
+            magFilter = samplerSettings.magFilter.forBinding(layout.sampleType).wgpu,
+            minFilter = samplerSettings.minFilter.forBinding(layout.sampleType).wgpu,
+            mipmapFilter = samplerSettings.mipFilter.forBinding(layout.sampleType).wgpuMipFilter(tex.mipMapping.isMipMapped),
             compare = compare,
         )
 
@@ -338,4 +338,12 @@ class WgpuBindGroupData(
         val binding: BindGroupData.StorageTextureBindingData<*>,
         val loadedTex: WgpuTextureResource
     )
+}
+/**
+ * This filter as a sampler of a binding of [sampleType] may have it: a binding of integer or unfilterable float
+ * textures takes only a non-filtering sampler, whatever the texture's own sampler settings ask for.
+ */
+private fun FilterMethod.forBinding(sampleType: TextureSampleType): FilterMethod = when (sampleType) {
+    TextureSampleType.FLOAT, TextureSampleType.DEPTH -> this
+    else -> FilterMethod.NEAREST
 }
