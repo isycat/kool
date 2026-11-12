@@ -48,13 +48,13 @@ sealed interface HeadlessFrameLoop {
  * [pixels] directly references GPU readback memory and is only valid during the listener call. Its content must
  * be copied (or converted via [toImageData]) if it is needed afterward.
  */
-class HeadlessFrame internal constructor(
+class HeadlessFrame(
     val width: Int,
     val height: Int,
     val format: HeadlessPixelFormat,
 
     /**
-     * Pixel data, rows are ordered top to bottom, without padding between rows (see [rowStride]).
+     * Pixel data, rows are ordered top to bottom, [rowStride] bytes apart.
      */
     val pixels: ByteBuffer,
 
@@ -62,11 +62,13 @@ class HeadlessFrame internal constructor(
      * Value of `Time.frameCount` when this frame was rendered.
      */
     val frameCount: Int,
-) {
+
     /**
-     * Number of bytes per pixel row.
+     * Number of bytes from the start of one pixel row to the next: [width] times [BYTES_PER_PIXEL], or more where the
+     * backend pads its rows (WebGPU copies rows 256 bytes aligned).
      */
-    val rowStride: Int get() = width * BYTES_PER_PIXEL
+    val rowStride: Int = width * BYTES_PER_PIXEL,
+) {
 
     /**
      * Frame output is opaque, i.e. alpha values should be ignored. Blending can leave alpha values < 1 in the
@@ -86,18 +88,20 @@ class HeadlessFrame internal constructor(
                 HeadlessPixelFormat.RGBA8 -> {
                     for (i in 0 until numPixels) {
                         val o = i * BYTES_PER_PIXEL
-                        dst.put(o, src.get(o))
-                        dst.put(o + 1, src.get(o + 1))
-                        dst.put(o + 2, src.get(o + 2))
+                        val s = sourceOffset(i)
+                        dst.put(o, src.get(s))
+                        dst.put(o + 1, src.get(s + 1))
+                        dst.put(o + 2, src.get(s + 2))
                         dst.put(o + 3, OPAQUE_ALPHA)
                     }
                 }
                 HeadlessPixelFormat.BGRA8 -> {
                     for (i in 0 until numPixels) {
                         val o = i * BYTES_PER_PIXEL
-                        dst.put(o, src.get(o + 2))
-                        dst.put(o + 1, src.get(o + 1))
-                        dst.put(o + 2, src.get(o))
+                        val s = sourceOffset(i)
+                        dst.put(o, src.get(s + 2))
+                        dst.put(o + 1, src.get(s + 1))
+                        dst.put(o + 2, src.get(s))
                         dst.put(o + 3, OPAQUE_ALPHA)
                     }
                 }
@@ -105,6 +109,8 @@ class HeadlessFrame internal constructor(
         }
         return BufferedImageData2d(data, width, height, TexFormat.RGBA, id = "headless-frame:$frameCount")
     }
+
+    private fun sourceOffset(pixel: Int): Int = (pixel / width) * rowStride + (pixel % width) * BYTES_PER_PIXEL
 
     companion object {
         const val BYTES_PER_PIXEL = 4

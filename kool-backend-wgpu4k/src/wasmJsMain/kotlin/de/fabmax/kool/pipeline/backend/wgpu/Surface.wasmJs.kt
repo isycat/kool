@@ -16,13 +16,13 @@ actual class WgpuSurface(private val handler: WGPUCanvasContext) : AutoCloseable
             ?.let { GPUTextureFormat.of(it) ?: error("Unsupported surface format: $it") }
             ?: error("WebGPU not supported")
 
-    actual fun getCurrentTextureView(): GPUTextureView {
-        return handler.getCurrentTexture()
-            .let { Texture(it, canBeDestroy = false)}
-            .createView()
-    }
+    actual fun getCurrentTexture(): GPUTexture = Texture(handler.getCurrentTexture(), canBeDestroy = false)
 
-    actual fun present() { /* does not exists on Web */ }
+    actual fun getCurrentTextureView(): GPUTextureView = getCurrentTexture().createView()
+
+    actual fun encodeOutput(encoder: GPUCommandEncoder) { /* the canvas shows the frame */ }
+
+    actual suspend fun present() { /* does not exists on Web */ }
 
     actual fun configure(surfaceConfiguration: SurfaceConfiguration) {
         handler.configure(map(surfaceConfiguration))
