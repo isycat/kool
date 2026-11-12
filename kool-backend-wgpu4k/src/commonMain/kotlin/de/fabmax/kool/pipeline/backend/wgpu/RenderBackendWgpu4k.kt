@@ -117,6 +117,8 @@ abstract class RenderBackendWgpu4k(
             SurfaceConfiguration(
                 device,
                 surface.format,
+                // Copied from where the screen pass renders it with one sample per pixel (frame copies).
+                usage = setOf(GPUTextureUsage.RenderAttachment, GPUTextureUsage.CopySrc),
                 viewFormats = setOf(surface.format)
             )
         )
@@ -141,6 +143,7 @@ abstract class RenderBackendWgpu4k(
             copyReadbacks(passEncoderState.encoder)
         }
         timestampQuery.resolve(passEncoderState.encoder)
+        surface.encodeOutput(passEncoderState.encoder)
         passEncoderState.endFrame()
 
         timestampQuery.readTimestamps()
@@ -354,6 +357,9 @@ abstract class RenderBackendWgpu4k(
 
     companion object : BackendProvider {
         override val displayName: String = "wgpu4k"
+
+        // On the desktop: an offscreen texture read back for the headless window subsystem.
+        override val isHeadlessCapable: Boolean = true
 
         override suspend fun createBackend(ctx: KoolContext): Result<RenderBackend> {
             return if (isRenderBackendWgpu4kSupported()) {

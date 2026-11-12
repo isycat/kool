@@ -14,6 +14,9 @@ import de.fabmax.kool.platform.Lwjgl3Context
 import de.fabmax.kool.platform.OsInfo
 import de.fabmax.kool.platform.glfw.GlfwWindow
 import de.fabmax.kool.platform.glfw.GlfwWindowSubsystem
+import de.fabmax.kool.platform.KoolWindowJvm
+import de.fabmax.kool.platform.headless.HeadlessWindow
+import de.fabmax.kool.platform.headless.HeadlessWindowSubsystem
 import de.fabmax.kool.util.logD
 import ffi.LibraryLoader
 import ffi.NativeAddress
@@ -21,6 +24,7 @@ import io.ygdrasil.webgpu.GPUAdapter
 import io.ygdrasil.webgpu.NativeSurface
 import io.ygdrasil.webgpu.WGPU
 import io.ygdrasil.webgpu.WGPU.Companion.createInstance
+import io.ygdrasil.wgpu.WGPUSurface
 import kotlinx.coroutines.runBlocking
 import org.lwjgl.glfw.GLFWNativeCocoa.glfwGetCocoaWindow
 import org.lwjgl.glfw.GLFWNativeWayland.glfwGetWaylandDisplay
@@ -36,12 +40,16 @@ internal actual fun isRenderBackendWgpu4kSupported(): Boolean = true
 
 internal actual suspend fun createRenderBackendWgpu4k(ctx: KoolContext): RenderBackendWgpu4k {
     LibraryLoader.load()
-
-    val glfw = KoolSystem.configJvm.windowSubsystem
-    check(glfw is GlfwWindowSubsystem) {
-        "Wgpu backend requires GLFW window subsystem"
+    val wgpu = createInstance() ?: error("fail to wgpu instance")
+    return when (val subsystem = KoolSystem.configJvm.windowSubsystem) {
+        is HeadlessWindowSubsystem -> headlessBackend(ctx, wgpu, subsystem)
+        is GlfwWindowSubsystem -> windowBackend(ctx, wgpu, subsystem)
+        else -> error("Wgpu backend requires the GLFW or the headless window subsystem")
     }
-    val glfwWindow = glfw.createWindow(ClientApi.UNMANAGED, null, ctx as Lwjgl3Context)
+}
+
+private suspend fun windowBackend(ctx: KoolContext, wgpu: WGPU, glfw: GlfwWindowSubsystem): RenderBackendWgpu4k {
+    val glfwWindow = glfw.createWindow(ClientApi.UNMANAGED, null, ctx as Lwjgl3Context) as GlfwWindow
     glfwWindow.setFullscreen(KoolSystem.configJvm.isFullscreen)
 
     // make the window visible
@@ -49,23 +57,25 @@ internal actual suspend fun createRenderBackendWgpu4k(ctx: KoolContext): RenderB
         glfwWindow.setVisible(true)
     }
 
-    val wgpu = createInstance() ?: error("fail to wgpu instance")
     val nativeSurface = wgpu.getNativeSurface(glfwWindow)
-    val surface = WgpuSurface(nativeSurface, glfwWindow)
-
     val adapter = wgpu.requestAdapter(nativeSurface)
         ?: error("fail to get adapter")
 
     // Get supported format and opacity on surface
     nativeSurface.computeSurfaceCapabilities(adapter)
 
-    val backend = DesktopRenderBackendWgpu4kWebGpu(
-        ctx,
-        surface,
-        KoolSystem.configJvm.numSamples,
-        { adapter }
-    )
-    backend.initContext()
+    return DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(WindowTarget(nativeSurface, glfwWindow)), KoolSystem.configJvm.numSamples) { adapter }
+}
+
+/** Renders without a window: into an offscreen texture, read back for the headless subsystem's listeners. */
+private fun headlessBackend(ctx: KoolContext, wgpu: WGPU, subsystem: HeadlessWindowSubsystem): RenderBackendWgpu4k {
+    val window = subsystem.createWindow(ClientApi.UNMANAGED, null, ctx as Lwjgl3Context) as HeadlessWindow
+    lateinit var backend: RenderBackendWgpu4k
+    val target = HeadlessTarget(window) { backend.device }
+    backend = DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(target), KoolSystem.configJvm.numSamples) {
+        // No surface to be compatible with: any adapter that can render will do.
+        wgpu.requestAdapter(NativeSurface(WGPUSurface(NativeAddress(MemorySegment.NULL)))) ?: error("no WebGPU adapter on this machine")
+    }
     return backend
 }
 
@@ -75,8 +85,8 @@ internal class DesktopRenderBackendWgpu4kWebGpu(
     numSamples: Int,
     adapterProvider: suspend () -> GPUAdapter
 ) : RenderBackendWgpu4k(ctx, surface, numSamples, adapterProvider), RenderBackendJvm {
-    override val window: GlfwWindow
-        get() = surface.glfwWindow
+    override val window: KoolWindowJvm
+        get() = surface.target.window
 
     override val isAsyncRendering: Boolean = KoolSystem.configJvm.asyncSceneUpdate
 

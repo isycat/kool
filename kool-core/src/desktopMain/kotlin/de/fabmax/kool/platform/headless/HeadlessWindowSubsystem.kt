@@ -20,7 +20,8 @@ import kotlin.time.Duration
  * forwarded via [input].
  *
  * Use cases are rendering tests (comparing rendered frames against reference images) and embedding kool into other
- * UI frameworks. Headless mode is only supported by the Vulkan backend ([RenderBackendVk]). No windowing library
+ * UI frameworks. Headless mode is supported by backends that say so (`BackendProvider.isHeadlessCapable`): Vulkan
+ * ([RenderBackendVk]) and WebGPU through wgpu4k. No windowing library
  * (SDL / GLFW / AWT) is initialized, so there are no main-thread requirements (e.g. `-XstartOnFirstThread` on macOS).
  *
  * Example:
@@ -156,11 +157,14 @@ class HeadlessWindowSubsystem(
         failPendingCaptures()
     }
 
-    internal val isFrameRequested: Boolean get() = frameListeners.isNotEmpty() || pendingCaptures.isNotEmpty()
+    /** Whether anyone wants the frame being rendered: a frame listener or a pending capture. For render backends. */
+    val isFrameRequested: Boolean get() = frameListeners.isNotEmpty() || pendingCaptures.isNotEmpty()
 
-    internal val isSyncReadback: Boolean get() = frameLoop == HeadlessFrameLoop.Manual || pendingCaptures.isNotEmpty()
+    /** Whether the frame being rendered must be delivered before the render call returns. For render backends. */
+    val isSyncReadback: Boolean get() = frameLoop == HeadlessFrameLoop.Manual || pendingCaptures.isNotEmpty()
 
-    internal fun takePendingCaptures(): List<CompletableDeferred<BufferedImageData2d>> {
+    /** Takes the captures waiting for the frame being rendered. For render backends. */
+    fun takePendingCaptures(): List<CompletableDeferred<BufferedImageData2d>> {
         return buildList {
             while (true) {
                 add(pendingCaptures.poll() ?: break)
@@ -168,7 +172,8 @@ class HeadlessWindowSubsystem(
         }
     }
 
-    internal fun deliverFrame(frame: HeadlessFrame, captures: List<CompletableDeferred<BufferedImageData2d>>) {
+    /** Hands a rendered [frame] to the frame listeners and completes [captures] with it. For render backends. */
+    fun deliverFrame(frame: HeadlessFrame, captures: List<CompletableDeferred<BufferedImageData2d>>) {
         frameListeners.forEach { it(frame) }
         if (captures.isNotEmpty()) {
             val image = frame.toImageData()
@@ -191,7 +196,7 @@ class HeadlessWindowSubsystem(
 
     override fun onEarlyInit() {
         val backend = KoolSystem.configJvm.renderBackend
-        check(backend === RenderBackendVk) {
+        check(backend.isHeadlessCapable) {
             "$UNSUPPORTED_BACKEND_MSG Configured render backend: ${backend.displayName}"
         }
     }
@@ -229,7 +234,8 @@ class HeadlessWindowSubsystem(
     }
 
     companion object {
-        private const val UNSUPPORTED_BACKEND_MSG = "HeadlessWindowSubsystem requires the Vulkan render backend: Use " +
-                "KoolConfigJvm(renderBackend = RenderBackendVk, ...). Headless mode is not supported by OpenGL."
+        private const val UNSUPPORTED_BACKEND_MSG = "HeadlessWindowSubsystem requires a headless capable render " +
+                "backend: Use KoolConfigJvm(renderBackend = RenderBackendVk, ...) or the wgpu4k backend. Headless mode " +
+                "is not supported by OpenGL."
     }
 }

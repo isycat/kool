@@ -1,43 +1,77 @@
 package de.fabmax.kool.pipeline.backend.wgpu
 
+import de.fabmax.kool.platform.KoolWindowJvm
 import de.fabmax.kool.platform.glfw.GlfwWindow
 import io.ygdrasil.webgpu.*
 
-actual class WgpuSurface(private val handler: NativeSurface, internal val glfwWindow: GlfwWindow) : AutoCloseable {
-    actual val width: UInt get() = glfwWindow.framebufferSize.x.toUInt()
-    actual val height: UInt get() = glfwWindow.framebufferSize.y.toUInt()
+/**
+ * Where the screen pass renders to on the desktop: a window's surface ([WindowTarget]) or, in headless mode, an offscreen
+ * texture read back after every frame ([HeadlessTarget]).
+ */
+internal interface SurfaceTarget : AutoCloseable {
+    val window: KoolWindowJvm
+    val format: GPUTextureFormat
+    val supportedAlphaMode: Set<CompositeAlphaMode>
 
-    val supportedFormats: Set<GPUTextureFormat> get() = handler.supportedFormats
-    actual val supportedAlphaMode: Set<CompositeAlphaMode> get() = handler.supportedAlphaMode
-    actual val format: GPUTextureFormat
-        get() = supportedFormats.firstOrNull {
-            it.name.contains("8Unorm") && !it.name.contains("Srgb")
-        } ?: supportedFormats.first()
+    fun getCurrentTexture(): GPUTexture
+    fun configure(surfaceConfiguration: SurfaceConfiguration, width: UInt, height: UInt)
+    fun encodeOutput(encoder: GPUCommandEncoder) { }
+    suspend fun present()
+}
 
-    private var currentTexture: SurfaceTexture? = null
+actual class WgpuSurface internal constructor(internal val target: SurfaceTarget) : AutoCloseable {
+    actual val width: UInt get() = target.window.framebufferSize.x.toUInt()
+    actual val height: UInt get() = target.window.framebufferSize.y.toUInt()
+
+    actual val supportedAlphaMode: Set<CompositeAlphaMode> get() = target.supportedAlphaMode
+    actual val format: GPUTextureFormat get() = target.format
+
     private var currentTextureView: GPUTextureView? = null
 
-    actual fun getCurrentTextureView(): GPUTextureView {
-        if (currentTextureView == null) {
-            currentTexture = handler.getCurrentTexture()
-            currentTextureView = currentTexture?.texture?.createView()
-        }
+    actual fun getCurrentTexture(): GPUTexture = target.getCurrentTexture()
 
-        return currentTextureView!!
-    }
+    actual fun getCurrentTextureView(): GPUTextureView =
+        currentTextureView ?: target.getCurrentTexture().createView().also { currentTextureView = it }
 
-    actual fun present() {
-        handler.present()
+    actual fun encodeOutput(encoder: GPUCommandEncoder) = target.encodeOutput(encoder)
+
+    actual suspend fun present() {
         currentTextureView?.close()
         currentTextureView = null
+        target.present()
+    }
+
+    actual fun configure(surfaceConfiguration: SurfaceConfiguration) {
+        target.configure(surfaceConfiguration, width, height)
+    }
+
+    actual override fun close() = target.close()
+}
+
+/** A GLFW window's surface. */
+internal class WindowTarget(private val handler: NativeSurface, val glfwWindow: GlfwWindow) : SurfaceTarget {
+    override val window: KoolWindowJvm get() = glfwWindow
+
+    override val supportedAlphaMode: Set<CompositeAlphaMode> get() = handler.supportedAlphaMode
+    override val format: GPUTextureFormat
+        get() = handler.supportedFormats.firstOrNull {
+            it.name.contains("8Unorm") && !it.name.contains("Srgb")
+        } ?: handler.supportedFormats.first()
+
+    private var currentTexture: SurfaceTexture? = null
+
+    override fun getCurrentTexture(): GPUTexture =
+        (currentTexture ?: handler.getCurrentTexture().also { currentTexture = it }).texture
+
+    override suspend fun present() {
+        handler.present()
         currentTexture?.texture?.close()
         currentTexture = null
     }
 
-    actual fun configure(surfaceConfiguration: SurfaceConfiguration) {
+    override fun configure(surfaceConfiguration: SurfaceConfiguration, width: UInt, height: UInt) {
         handler.configure(surfaceConfiguration, width, height)
     }
 
-    actual override fun close() = handler.close()
-
+    override fun close() = handler.close()
 }

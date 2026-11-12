@@ -404,6 +404,7 @@ class RenderBackendVk(val ctx: Lwjgl3Context) : RenderBackendJvm {
 
     companion object : BackendProvider {
         override val displayName: String = "Vulkan"
+        override val isHeadlessCapable: Boolean = true
 
         override suspend fun createBackend(ctx: KoolContext): Result<RenderBackend> {
             return try {
