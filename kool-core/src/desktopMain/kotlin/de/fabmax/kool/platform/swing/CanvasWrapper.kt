@@ -11,14 +11,14 @@ import de.fabmax.kool.util.WindowTitleHoverHandler
 import org.lwjgl.vulkan.KHRSurface
 import org.lwjgl.vulkan.VkInstance
 import org.lwjgl.vulkan.awt.AWTVK
-import java.awt.Canvas
+import java.awt.Component
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import kotlin.math.roundToInt
 
-internal class CanvasWrapper(val canvas: Canvas) : KoolWindowJvm {
+internal class CanvasWrapper(val canvas: Component) : KoolWindowJvm {
     val input: SwingInput = SwingInput(this)
 
     private val canvasScale: Vec2f get() {
@@ -26,11 +26,13 @@ internal class CanvasWrapper(val canvas: Canvas) : KoolWindowJvm {
         return if (t == null) Vec2f.ONES else Vec2f(t.scaleX.toFloat(), t.scaleY.toFloat())
     }
 
+    // A window's surface is what lies inside its borders and title bar, where it has them.
     private val canvasSize: Vec2i get() {
         val s = canvasScale
+        val insets = (canvas as? java.awt.Window)?.insets
         return Vec2i(
-            x = (canvas.width * s.x).roundToInt(),
-            y = (canvas.height * s.y).roundToInt()
+            x = ((canvas.width - (insets?.let { it.left + it.right } ?: 0)) * s.x).roundToInt(),
+            y = ((canvas.height - (insets?.let { it.top + it.bottom } ?: 0)) * s.y).roundToInt()
         )
     }
 
@@ -116,7 +118,7 @@ internal class CanvasWrapper(val canvas: Canvas) : KoolWindowJvm {
     }
 
     override fun createVulkanSurface(instance: VkInstance): Long {
-        return AWTVK.create(canvas, instance)
+        return AWTVK.create(canvas as java.awt.Canvas, instance)
     }
 
     override fun destroyVulkanSurface(surface: Long, instance: VkInstance) {

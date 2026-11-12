@@ -26,7 +26,7 @@ import kotlin.system.exitProcess
 
 
 class SwingWindowSubsystem(
-    val providedCanvas: Canvas? = null,
+    val providedCanvas: java.awt.Component? = null,
     val makeFocusable: Boolean = true,
     val onCreated: (() -> Unit)? = null,
     val onClosed: (() -> Unit)? = null,

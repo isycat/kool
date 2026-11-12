@@ -113,6 +113,11 @@ abstract class RenderBackendWgpu4k(
         textureLoader = WgpuTextureLoader(this)
         logI { "WebGPU context created" }
 
+        configureSurface()
+    }
+
+    /** Configures the surface for its present size: once the device is there, and again whenever the size changes. */
+    private fun configureSurface() {
         surface.configure(
             SurfaceConfiguration(
                 device,
@@ -129,6 +134,8 @@ abstract class RenderBackendWgpu4k(
 
         if (surface.width.toInt() != renderSize.x || surface.height.toInt() != renderSize.y) {
             renderSize = Vec2i(surface.width.toInt(), surface.height.toInt())
+            // The surface's textures keep the size it was configured for: a resized window needs it configured again.
+            configureSurface()
             screenPass.applySize(surface.width.toInt(), surface.height.toInt())
         }
 
