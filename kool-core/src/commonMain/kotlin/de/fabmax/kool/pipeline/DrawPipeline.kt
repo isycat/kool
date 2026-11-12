@@ -35,6 +35,8 @@ class DrawPipeline(
         pipelineHashBuilder += depthCompareOp
         pipelineHashBuilder += isWriteDepth
         pipelineHashBuilder += lineWidth
+        pipelineHashBuilder += pipelineConfig.depthBias
+        pipelineHashBuilder += pipelineConfig.depthBiasSlope
 
         pipelineHashBuilder += vertexLayout.hash
         pipelineHashBuilder += shaderCode.hash
