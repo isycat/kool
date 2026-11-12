@@ -55,6 +55,15 @@ class WasmContext internal constructor(canvas: HTMLCanvasElement, val config: Ko
     }
 
     private suspend fun renderFrame(time: Double) {
+        renderOnce(time)
+        requestAnimationFrame()
+    }
+
+    /**
+     * Renders a single frame, for applications that render when they have something new to show rather than in a
+     * loop ([run] is then never called). [time] is the frame's time in milliseconds, as an animation frame gives it.
+     */
+    suspend fun renderOnce(time: Double) {
         // update viewport size according to window scale
         window.updateCanvasSize()
 
@@ -64,7 +73,6 @@ class WasmContext internal constructor(canvas: HTMLCanvasElement, val config: Ko
         incrementFrameTime(time / 1000.0)
         KoolDispatchers.Backend.executeDispatchedTasks()
         backend.renderFrame(frameData, this)
-        requestAnimationFrame()
     }
 
     override fun openUrl(url: String, sameWindow: Boolean) {
@@ -226,6 +234,18 @@ class WasmWindow(val canvas: HTMLCanvasElement, val config: KoolConfigWasm) : Ko
             }
             e.preventDefault()
         }
+    }
+
+    /**
+     * Sets the size of a canvas that does not fill the window ([KoolConfigWasm.isJsCanvasToWindowFitting] false), in
+     * CSS pixels; the next frame is rendered at that size times the screen's scale.
+     */
+    fun setCanvasSize(width: Int, height: Int) {
+        check(!config.isJsCanvasToWindowFitting) { "The canvas takes the window's size" }
+        canvasFixedWidth = width
+        canvasFixedHeight = height
+        canvas.style.width = "${width}px"
+        canvas.style.height = "${height}px"
     }
 
     private fun applyFlags(oldFlags: WindowFlags, newFlags: WindowFlags) {

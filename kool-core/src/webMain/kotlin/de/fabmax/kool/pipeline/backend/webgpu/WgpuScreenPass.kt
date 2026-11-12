@@ -27,7 +27,7 @@ class WgpuScreenPass(backend: RenderBackendWebGpu) :
     }
 
     fun renderScene(passData: PassData, passEncoderState: RenderPassEncoderState) {
-        if (depthAttachment == null || colorTexture == null) {
+        if (depthAttachment == null || (numSamples > 1 && colorTexture == null)) {
             updateRenderTextures(backend.framebufferSize.x, backend.framebufferSize.y)
         }
         render(passData, passEncoderState)
@@ -39,7 +39,8 @@ class WgpuScreenPass(backend: RenderBackendWebGpu) :
         val colorDst = if (frameCopy.isCopyColor) frameCopy.colorCopy2d else null
         val depthDst = if (frameCopy.isCopyDepth) frameCopy.depthCopy2d else null
 
-        val colorSrc = colorTexture!!
+        // With one sample per pixel the pass renders straight into the canvas's texture.
+        val colorSrc = colorTexture ?: canvasContext.getCurrentTexture()
         val width = colorSrc.width
         val height = colorSrc.height
 
@@ -125,10 +126,11 @@ class WgpuScreenPass(backend: RenderBackendWebGpu) :
 
         val colors = listOf(
             GPURenderPassColorAttachment(
-                view = colorTextureView!!,
+                view = colorTextureView ?: canvasContext.getCurrentTexture().createView(),
                 loadOp = colorLoadOp,
                 clearValue = clearColor,
-                resolveTarget = canvasContext.getCurrentTexture().createView()
+                // A resolve target needs a multi-sampled source: one sample per pixel renders into the canvas itself.
+                resolveTarget = if (numSamples > 1) canvasContext.getCurrentTexture().createView() else null
             )
         )
         val depth = GPURenderPassDepthStencilAttachment(
@@ -144,14 +146,19 @@ class WgpuScreenPass(backend: RenderBackendWebGpu) :
         colorTexture?.destroy()
         depthAttachment?.destroy()
 
-        val colorDescriptor = GPUTextureDescriptor(
-            size = intArrayOf(width, height),
-            format = backend.canvasFormat,
-            usage = GPUTextureUsage.RENDER_ATTACHMENT or GPUTextureUsage.TEXTURE_BINDING,
-            sampleCount = numSamples
-        )
-        colorTexture = device.createTexture(colorDescriptor).also {
-            colorTextureView = it.createView()
+        if (numSamples > 1) {
+            val colorDescriptor = GPUTextureDescriptor(
+                size = intArrayOf(width, height),
+                format = backend.canvasFormat,
+                usage = GPUTextureUsage.RENDER_ATTACHMENT or GPUTextureUsage.TEXTURE_BINDING,
+                sampleCount = numSamples
+            )
+            colorTexture = device.createTexture(colorDescriptor).also {
+                colorTextureView = it.createView()
+            }
+        } else {
+            colorTexture = null
+            colorTextureView = null
         }
 
         val depthDescriptor = GPUTextureDescriptor(
