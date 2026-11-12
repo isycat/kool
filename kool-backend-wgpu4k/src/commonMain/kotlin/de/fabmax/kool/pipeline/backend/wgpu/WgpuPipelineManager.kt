@@ -45,7 +45,6 @@ class WgpuPipelineManager(val backend: RenderBackendWgpu4k) {
                 label = "${pipeline.name} vertex shader",
                 code = shaderCode.vertexSrc
             )
-            backend.device.pushErrorScope(GPUErrorFilter.Validation)
             val module = backend.device.createShaderModule(desc)
             module.checkErrors("vertex-shader", shaderCode.vertexSrc, pipeline)
             UsedShaderModule(module)
@@ -62,7 +61,6 @@ class WgpuPipelineManager(val backend: RenderBackendWgpu4k) {
                 code = shaderCode.fragmentSrc
             )
             val module = backend.device.createShaderModule(desc)
-            backend.device.pushErrorScope(GPUErrorFilter.Validation)
             module.checkErrors("fragment-shader", shaderCode.fragmentSrc, pipeline)
             UsedShaderModule(module)
         }
@@ -78,7 +76,6 @@ class WgpuPipelineManager(val backend: RenderBackendWgpu4k) {
                 code = shaderCode.computeSrc
             )
             val module = backend.device.createShaderModule(desc)
-            backend.device.pushErrorScope(GPUErrorFilter.Validation)
             module.checkErrors("compute-shader", shaderCode.computeSrc, pipeline)
             UsedShaderModule(module)
         }

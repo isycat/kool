@@ -124,12 +124,15 @@ class WgpuDrawPipeline(
             else -> drawPipeline.pipelineConfig.depthTest
         }
 
+        val away = if (renderPass.depthMode == DepthMode.Reversed) -1f else 1f
         val depthStencil = if (!renderPass.hasDepth) null else {
             gpuRenderPass.depthFormat?.let { depthFormat ->
                 DepthStencilState(
                     format = depthFormat,
                     depthWriteEnabled = drawPipeline.isWriteDepth,
-                    depthCompare = depthOp.wgpu
+                    depthCompare = depthOp.wgpu,
+                    depthBias = (drawPipeline.pipelineConfig.depthBias * away).toInt(),
+                    depthBiasSlopeScale = drawPipeline.pipelineConfig.depthBiasSlope * away
                 )
             }
         }
