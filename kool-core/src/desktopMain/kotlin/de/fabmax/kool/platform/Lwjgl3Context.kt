@@ -132,7 +132,7 @@ class Lwjgl3Context internal constructor (val config: KoolConfigJvm) : KoolConte
         }
     }
 
-    override fun getSysInfos(): List<String> = sysInfo.lines
+    override fun getSysInfos(): List<String> = sysInfo.formatted()
 
     private inner class SysInfo {
         val lines = ArrayList<String>()
@@ -148,7 +148,6 @@ class Lwjgl3Context internal constructor (val config: KoolConfigJvm) : KoolConte
             lines.add(System.getProperty("java.version") + ": " + System.getProperty("java.vm.name"))
             lines.add(deviceName)
             lines.add("")
-            update()
         }
 
         fun update() {
@@ -171,7 +170,17 @@ class Lwjgl3Context internal constructor (val config: KoolConfigJvm) : KoolConte
                 }
             }
             prevHeapSz = heapSz
-            lines[2] = "Heap: %.1f MB (+%.1f MB/s)".format(Locale.ENGLISH, heapSz, avgHeapGrowth)
+        }
+
+        /**
+         * Formats the heap line only when someone asks for it: [update] runs every frame and must not allocate.
+         */
+        fun formatted(): List<String> {
+            if (!isInitialized) {
+                update()
+            }
+            lines[2] = "Heap: %.1f MB (+%.1f MB/s)".format(Locale.ENGLISH, prevHeapSz, avgHeapGrowth)
+            return lines
         }
     }
 }
