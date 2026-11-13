@@ -42,7 +42,9 @@ abstract class RenderBackendWgpu4k(
     override val deviceCoordinates: DeviceCoordinates = DeviceCoordinates.WEB_GPU
     override lateinit var features: BackendFeatures; protected set
 
-    var renderSize = Vec2i(surface.width.toInt(), surface.height.toInt())
+    /** The window size the surface was last configured for. */
+    var renderSize = surface.size
+        private set
 
     override lateinit var device: GPUDevice
         protected set
@@ -117,7 +119,7 @@ abstract class RenderBackendWgpu4k(
     }
 
     /** Configures the surface for its present size: once the device is there, and again whenever the size changes. */
-    private fun configureSurface() {
+    private fun configureSurface(size: Vec2i = surface.size) {
         surface.configure(
             SurfaceConfiguration(
                 device,
@@ -125,18 +127,20 @@ abstract class RenderBackendWgpu4k(
                 // Copied from where the screen pass renders it with one sample per pixel (frame copies).
                 usage = setOf(GPUTextureUsage.RenderAttachment, GPUTextureUsage.CopySrc),
                 viewFormats = setOf(surface.format)
-            )
+            ),
+            size
         )
     }
 
     protected suspend fun renderFrameSuspending(frameData: FrameData, ctx: KoolContext) {
         BackendStats.resetPerFrameCounts()
 
-        if (surface.width.toInt() != renderSize.x || surface.height.toInt() != renderSize.y) {
-            renderSize = Vec2i(surface.width.toInt(), surface.height.toInt())
-            // The surface's textures keep the size it was configured for: a resized window needs it configured again.
-            configureSurface()
-            screenPass.applySize(surface.width.toInt(), surface.height.toInt())
+        // The surface's textures keep the size it was configured for: a resized window needs it configured again. The
+        // screen pass sizes its own attachments from the texture it is given, whatever size that is.
+        val windowSize = surface.size
+        if (windowSize != renderSize) {
+            renderSize = windowSize
+            configureSurface(windowSize)
         }
 
         passEncoderState.beginFrame()

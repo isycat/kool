@@ -38,6 +38,8 @@ class HeadlessWindow internal constructor(
                 updateSizesAndScales()
             }
         }
+    // Read by the render thread and, through [resizeNow], written by any.
+    @Volatile
     override var framebufferSize: Vec2i = initialSize.coerceValid()
         private set
     override var size: Vec2i = framebufferSize
@@ -84,6 +86,16 @@ class HeadlessWindow internal constructor(
         requestedSize.set(SizeRequest(framebufferSize.coerceValid(), scale))
     }
 
+    /**
+     * Changes the framebuffer size at once, from any thread, even while a frame is drawn: as a native window's size
+     * changes on the windowing system's thread, between any two reads of it. Listeners hear of it with the next frame.
+     */
+    fun resizeNow(framebufferSize: Vec2i) {
+        val valid = framebufferSize.coerceValid()
+        this.framebufferSize = valid
+        requestedSize.set(SizeRequest(valid, parentScreenScale, isApplied = true))
+    }
+
     override fun setSizeOnScreen(size: Vec2i) {
         setSize(Vec2i((size.x * parentScreenScale).roundToInt(), (size.y * parentScreenScale).roundToInt()))
     }
@@ -116,7 +128,7 @@ class HeadlessWindow internal constructor(
         requestedSize.getAndSet(null)?.let { request ->
             val isSizeChange = request.size != framebufferSize
             val isScaleChange = request.scale != parentScreenScale
-            if (isSizeChange || isScaleChange) {
+            if (isSizeChange || isScaleChange || request.isApplied) {
                 framebufferSize = request.size
                 parentScreenScale = request.scale
                 updateSizesAndScales()
@@ -152,5 +164,6 @@ class HeadlessWindow internal constructor(
 
     private fun Vec2i.coerceValid() = Vec2i(x.coerceAtLeast(1), y.coerceAtLeast(1))
 
-    private class SizeRequest(val size: Vec2i, val scale: Float)
+    /** A size to take at the next frame; [isApplied] where the framebuffer has it already and only the rest follows. */
+    private class SizeRequest(val size: Vec2i, val scale: Float, val isApplied: Boolean = false)
 }

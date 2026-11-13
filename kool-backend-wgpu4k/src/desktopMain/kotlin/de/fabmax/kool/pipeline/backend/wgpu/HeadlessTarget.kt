@@ -1,5 +1,6 @@
 package de.fabmax.kool.pipeline.backend.wgpu
 
+import de.fabmax.kool.math.Vec2i
 import de.fabmax.kool.pipeline.BufferedImageData2d
 import de.fabmax.kool.platform.KoolWindowJvm
 import de.fabmax.kool.platform.headless.HeadlessFrame
@@ -37,8 +38,11 @@ internal class HeadlessTarget(private val headless: HeadlessWindow, private val 
     var framesCopied = 0
         private set
 
+    /** The size the target was last configured for: as a window's surface does, its texture has that size, whatever the window's is now. */
+    private var configuredSize = headless.framebufferSize
+
     override fun getCurrentTexture(): GPUTexture {
-        val (width, height) = headless.framebufferSize
+        val (width, height) = configuredSize
         val kept = texture?.takeIf { it.width.toInt() == width && it.height.toInt() == height }
         return kept ?: device().createTexture(
             TextureDescriptor(
@@ -53,7 +57,9 @@ internal class HeadlessTarget(private val headless: HeadlessWindow, private val 
         }
     }
 
-    override fun configure(surfaceConfiguration: SurfaceConfiguration, width: UInt, height: UInt) { }
+    override fun configure(surfaceConfiguration: SurfaceConfiguration, width: UInt, height: UInt) {
+        configuredSize = Vec2i(width.toInt(), height.toInt())
+    }
 
     override fun encodeOutput(encoder: GPUCommandEncoder) {
         if (!subsystem.isFrameRequested) return

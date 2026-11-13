@@ -5,6 +5,7 @@ import de.fabmax.kool.pipeline.ClearColorFill
 import de.fabmax.kool.pipeline.ClearColorLoad
 import de.fabmax.kool.pipeline.ClearDepthLoad
 import de.fabmax.kool.pipeline.FrameCopy
+import de.fabmax.kool.math.Vec2i
 import de.fabmax.kool.util.releaseDelayed
 import io.ygdrasil.webgpu.*
 
@@ -23,18 +24,30 @@ class WgpuScreenPass(backend: RenderBackendWgpu4k, numSamples: Int) :
     private var depthAttachment: GPUTexture? = null
     private var depthAttachmentView: GPUTextureView? = null
 
-    // The surface's textures are the size the backend last configured them for.
-    override fun viewportLimit() = backend.renderSize
+    /** The size the depth and multi-sampled attachments were made for: always the acquired surface texture's. */
+    private var attachedSize = Vec2i(0, 0)
 
-    fun applySize(width: Int, height: Int) {
-        updateRenderTextures(width.toUInt(), height.toUInt())
-    }
+    // No viewport may reach past the texture the frame draws into.
+    override fun viewportLimit() = attachedSize
 
     suspend fun renderScene(passData: PassData, passEncoderState: RenderPassEncoderState) {
-        if (depthAttachment == null || (numSamples > 1 && colorTexture == null)) {
-            updateRenderTextures(surface.width, surface.height)
-        }
+        sizeAttachmentsFor(surface.getCurrentTexture())
         render(passData, passEncoderState)
+    }
+
+    /**
+     * Makes the depth and multi-sampled attachments again wherever they differ in size from [target], the texture this
+     * frame draws into. The window's size is read on another thread and may differ from the size the surface was last
+     * configured for: only the acquired texture says what size every attachment of the pass must have.
+     */
+    private fun sizeAttachmentsFor(target: GPUTexture) {
+        val width = target.width
+        val height = target.height
+        val missing = depthAttachment == null || (numSamples > 1 && colorTexture == null)
+        if (missing || attachedSize.x.toUInt() != width || attachedSize.y.toUInt() != height) {
+            updateRenderTextures(width, height)
+            attachedSize = Vec2i(width.toInt(), height.toInt())
+        }
     }
 
     override fun generateMipLevels(encoder: GPUCommandEncoder) { }

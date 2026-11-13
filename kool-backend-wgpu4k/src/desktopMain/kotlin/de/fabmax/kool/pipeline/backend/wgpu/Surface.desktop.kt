@@ -1,5 +1,6 @@
 package de.fabmax.kool.pipeline.backend.wgpu
 
+import de.fabmax.kool.math.Vec2i
 import de.fabmax.kool.platform.KoolWindowJvm
 import io.ygdrasil.webgpu.*
 
@@ -21,6 +22,7 @@ internal interface SurfaceTarget : AutoCloseable {
 actual class WgpuSurface internal constructor(internal val target: SurfaceTarget) : AutoCloseable {
     actual val width: UInt get() = target.window.framebufferSize.x.toUInt()
     actual val height: UInt get() = target.window.framebufferSize.y.toUInt()
+    actual val size: Vec2i get() = target.window.framebufferSize
 
     actual val supportedAlphaMode: Set<CompositeAlphaMode> get() = target.supportedAlphaMode
     actual val format: GPUTextureFormat get() = target.format
@@ -40,8 +42,8 @@ actual class WgpuSurface internal constructor(internal val target: SurfaceTarget
         target.present()
     }
 
-    actual fun configure(surfaceConfiguration: SurfaceConfiguration) {
-        target.configure(surfaceConfiguration, width, height)
+    actual fun configure(surfaceConfiguration: SurfaceConfiguration, size: Vec2i) {
+        target.configure(surfaceConfiguration, size.x.toUInt(), size.y.toUInt())
     }
 
     actual override fun close() = target.close()

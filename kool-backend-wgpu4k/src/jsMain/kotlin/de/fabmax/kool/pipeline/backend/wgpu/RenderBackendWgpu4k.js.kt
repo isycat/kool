@@ -23,7 +23,8 @@ internal actual suspend fun createRenderBackendWgpu4k(ctx: KoolContext): RenderB
                 device,
                 surface.format,
                 viewFormats = setOf(surface.format)
-            )
+            ),
+            surface.size
         )
     }
     return backend

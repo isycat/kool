@@ -1,5 +1,6 @@
 package de.fabmax.kool.pipeline.backend.wgpu
 
+import de.fabmax.kool.math.Vec2i
 import io.ygdrasil.webgpu.*
 
 actual class WgpuSurface(private val handler: WGPUCanvasContext) : AutoCloseable {
@@ -7,6 +8,9 @@ actual class WgpuSurface(private val handler: WGPUCanvasContext) : AutoCloseable
         get() = handler.canvas.castAs<HTMLCanvasElement>().width.asUInt()
     actual val height: UInt
         get() = handler.canvas.castAs<HTMLCanvasElement>().height.asUInt()
+
+    actual val size: Vec2i
+        get() = Vec2i(width.toInt(), height.toInt())
 
     actual val supportedAlphaMode: Set<CompositeAlphaMode> =
         setOf(CompositeAlphaMode.Opaque, CompositeAlphaMode.Premultiplied)
@@ -24,7 +28,7 @@ actual class WgpuSurface(private val handler: WGPUCanvasContext) : AutoCloseable
 
     actual suspend fun present() { /* does not exists on Web */ }
 
-    actual fun configure(surfaceConfiguration: SurfaceConfiguration) {
+    actual fun configure(surfaceConfiguration: SurfaceConfiguration, size: Vec2i) {
         handler.configure(map(surfaceConfiguration))
     }
 
