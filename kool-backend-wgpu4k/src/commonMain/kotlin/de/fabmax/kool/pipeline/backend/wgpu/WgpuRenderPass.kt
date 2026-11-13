@@ -143,7 +143,14 @@ abstract class WgpuRenderPass(
             val made = cmd.pipeline.pipelineBackend as? WgpuDrawPipeline
             val bindSuccessful = isCmdValid &&
                 (made?.bind(cmd, passEncoderState) ?: backend.pipelineManager.bindDrawPipeline(cmd, passEncoderState))
-            if (bindSuccessful) {
+            val indirect = cmd.mesh.indirectArgs
+            if (bindSuccessful && indirect != null) {
+                // The draw's arguments are where the GPU wrote them: nothing is drawn before the buffer is made.
+                (indirect.gpuBuffer as GpuBufferWgpu?)?.let {
+                    passEncoderState.passEncoder.drawIndexedIndirect(it.buffer, cmd.mesh.indirectOffset.toULong())
+                    BackendStats.addDrawCommands(1, 0)
+                }
+            } else if (bindSuccessful) {
                 if (insts == null) {
                     passEncoderState.passEncoder.drawIndexed(cmd.vertexData.numIndices.toUInt())
                     BackendStats.addDrawCommands(1, cmd.vertexData.numPrimitives)

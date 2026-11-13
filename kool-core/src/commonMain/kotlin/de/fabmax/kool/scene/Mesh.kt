@@ -198,6 +198,15 @@ open class Mesh<Layout: Struct>(
 
     var rayTest = MeshRayTest.boundsTest()
 
+    /**
+     * Where the GPU writes this mesh's draw arguments, or null: the mesh is then drawn as many times as [instances] say.
+     * With a buffer (made with [BufferUsage.isIndirect] and written by a compute shader, five 32-bit words at
+     * [indirectOffset]: index count, instance count, first index, base vertex, first instance), the GPU draws as many
+     * instances as it wrote, with no instance list: a vertex shader finds its data by its instance index.
+     */
+    var indirectArgs: GpuBuffer? = null
+    var indirectOffset = 0L
+
     init {
         // frustum check is disabled by default for instanced meshes
         isFrustumChecked = instances == null

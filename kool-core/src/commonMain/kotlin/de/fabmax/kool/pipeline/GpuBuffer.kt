@@ -223,11 +223,15 @@ value class BufferUsage(val usage: Int) {
     val isInstance: Boolean get() = usage and USAGE_INSTANCE_BUFFER != 0
     val isIndex: Boolean get() = usage and USAGE_INDEX_BUFFER != 0
 
+    /** Whether the buffer holds draw arguments a draw reads ([de.fabmax.kool.scene.Mesh.indirectArgs]). */
+    val isIndirect: Boolean get() = usage and USAGE_INDIRECT_BUFFER != 0
+
     companion object {
         const val USAGE_STORAGE_BUFFER = 1
         const val USAGE_VERTEX_BUFFER = 2
         const val USAGE_INSTANCE_BUFFER = 4
         const val USAGE_INDEX_BUFFER = 8
+        const val USAGE_INDIRECT_BUFFER = 16
 
         /**
          * Creates a BufferUsage with the given flags / usages set to true.
@@ -236,13 +240,15 @@ value class BufferUsage(val usage: Int) {
             storage: Boolean = false,
             vertex: Boolean = false,
             instance: Boolean = false,
-            index: Boolean = false
+            index: Boolean = false,
+            indirect: Boolean = false,
         ): BufferUsage {
             var usage = 0
             if (storage) usage = USAGE_STORAGE_BUFFER
             if (vertex) usage = usage or USAGE_VERTEX_BUFFER
             if (instance) usage = usage or USAGE_INSTANCE_BUFFER
             if (index) usage = usage or USAGE_INDEX_BUFFER
+            if (indirect) usage = usage or USAGE_INDIRECT_BUFFER
             return BufferUsage(usage)
         }
     }
