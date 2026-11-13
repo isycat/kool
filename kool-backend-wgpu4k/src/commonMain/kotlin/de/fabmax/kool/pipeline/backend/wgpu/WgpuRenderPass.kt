@@ -139,7 +139,10 @@ abstract class WgpuRenderPass(
 
             val insts = cmd.instanceData
             val isCmdValid = cmd.isActive && cmd.vertexData.numIndices > 0 && (insts == null || insts.numInstances > 0)
-            val bindSuccessful = isCmdValid && backend.pipelineManager.bindDrawPipeline(cmd, passEncoderState)
+            // A pipeline made already is bound without a suspending call, which makes an object of every call.
+            val made = cmd.pipeline.pipelineBackend as? WgpuDrawPipeline
+            val bindSuccessful = isCmdValid &&
+                (made?.bind(cmd, passEncoderState) ?: backend.pipelineManager.bindDrawPipeline(cmd, passEncoderState))
             if (bindSuccessful) {
                 if (insts == null) {
                     passEncoderState.passEncoder.drawIndexed(cmd.vertexData.numIndices.toUInt())

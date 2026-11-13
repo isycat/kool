@@ -166,7 +166,11 @@ abstract class RenderBackendWgpu4k(
         forEachPass { passData ->
             val t = Time.precisionTime
             passData.forEachView { viewData ->
-                viewData.drawQueue.forEach { cmd -> pipelineManager.prepareDrawPipeline(cmd) }
+                viewData.drawQueue.forEach { cmd ->
+                    // A pipeline made already is prepared without a suspending call, which makes an object of every call.
+                    val made = cmd.pipeline.pipelineBackend as? WgpuDrawPipeline
+                    if (made != null) made.updateGeometry(cmd) else pipelineManager.prepareDrawPipeline(cmd)
+                }
             }
             passData.gpuPass.tRecord = (Time.precisionTime - t).seconds
         }
