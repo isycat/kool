@@ -99,16 +99,26 @@ abstract class WgpuRenderPass(
         }
     }
 
+    /** The size of the target at mip level 0, which no viewport may reach past; unlimited where a pass does not say. */
+    protected open fun viewportLimit(): Vec2i = Vec2i(Int.MAX_VALUE, Int.MAX_VALUE)
+
     private suspend fun renderView(viewData: ViewData, passEncoderState: RenderPassEncoderState) {
         val mipLevel = passEncoderState.mipLevel
         val layer = passEncoderState.layer
         viewData.drawQueue.view.setupView()
 
         val viewport = viewData.viewport
-        val x = (viewport.x shr mipLevel).toFloat()
-        val y = (viewport.y shr mipLevel).toFloat()
-        val w = (viewport.width shr mipLevel).toFloat()
-        val h = (viewport.height shr mipLevel).toFloat()
+        // A viewport placed by the application may reach past the target for a frame, e.g. one laid out for a window
+        // size the surface has not taken yet: WebGPU rejects it, so no more of it than the target has is set.
+        val limit = viewportLimit()
+        val left = (viewport.x shr mipLevel).coerceIn(0, limit.x shr mipLevel)
+        val top = (viewport.y shr mipLevel).coerceIn(0, limit.y shr mipLevel)
+        val x = left.toFloat()
+        val y = top.toFloat()
+        val w = (viewport.width shr mipLevel).coerceIn(0, (limit.x shr mipLevel) - left).toFloat()
+        val h = (viewport.height shr mipLevel).coerceIn(0, (limit.y shr mipLevel) - top).toFloat()
+        // Nothing of the viewport lies on the target: nothing of the view is drawn (an empty viewport is rejected too).
+        if (w <= 0f || h <= 0f) return
         passEncoderState.passEncoder.setViewport(x, y, w, h, 0f, 1f)
 
         // only do copy when last mip-level is rendered

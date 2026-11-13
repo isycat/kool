@@ -23,6 +23,9 @@ class WgpuScreenPass(backend: RenderBackendWgpu4k, numSamples: Int) :
     private var depthAttachment: GPUTexture? = null
     private var depthAttachmentView: GPUTextureView? = null
 
+    // The surface's textures are the size the backend last configured them for.
+    override fun viewportLimit() = backend.renderSize
+
     fun applySize(width: Int, height: Int) {
         updateRenderTextures(width.toUInt(), height.toUInt())
     }
