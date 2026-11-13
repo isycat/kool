@@ -923,7 +923,12 @@ class WgslGenerator private constructor(
         val vertexOutputs = stage.interStageVars
             .mapIndexed { i, output ->
                 val outVal = output.output
-                val interp = if (output.interpolation == KslInterStageInterpolation.Flat) " @interpolate(flat)" else ""
+                val interp = when (output.interpolation) {
+                    KslInterStageInterpolation.Flat -> " @interpolate(flat)"
+                    // Linear on the screen, not in perspective: for what is laid out in pixels.
+                    KslInterStageInterpolation.NoPerspective -> " @interpolate(linear)"
+                    else -> ""
+                }
                 WgslStructMember("vertexOutput", outVal.stateName, outVal.expressionType.wgslTypeName(), "@location($i)$interp ")
             }
         val position = WgslStructMember("vertexOutput", KslVertexStage.NAME_OUT_POSITION, "vec4f", "@builtin(position) ")
@@ -946,7 +951,11 @@ class WgslGenerator private constructor(
         val fragmentInputs = stage.interStageVars
             .mapIndexed { i, input ->
                 val inVal = input.input
-                val interp = if (input.interpolation == KslInterStageInterpolation.Flat) " @interpolate(flat)" else ""
+                val interp = when (input.interpolation) {
+                    KslInterStageInterpolation.Flat -> " @interpolate(flat)"
+                    KslInterStageInterpolation.NoPerspective -> " @interpolate(linear)"
+                    else -> ""
+                }
                 WgslStructMember("fragmentInput", inVal.stateName, inVal.expressionType.wgslTypeName(), "@location($i)$interp ")
             }
         val fragPosition = if (stage.isUsingFragPosition) {
