@@ -44,6 +44,7 @@ internal class WgpuGrowingBuffer(
         private set
 
     fun writeData(data: Float32Buffer) {
+        backend.counted(data.limit * 4L)
         checkSize(data.limit * 4L)
         data.asArrayBuffer { arrayBuffer ->
             device.queue.writeBuffer(
@@ -57,6 +58,7 @@ internal class WgpuGrowingBuffer(
     }
 
     fun writeData(data: Int32Buffer) {
+        backend.counted(data.limit * 4L)
         checkSize(data.limit * 4L)
         data.asArrayBuffer { arrayBuffer ->
             device.queue.writeBuffer(
@@ -72,6 +74,7 @@ internal class WgpuGrowingBuffer(
     fun writeData(data: MixedBuffer) {
         // A mixed buffer's limit counts bytes, not 4-byte elements.
         val bytes = data.limit.toLong()
+        backend.counted(bytes)
         checkSize(bytes)
         data.asArrayBuffer { arrayBuffer ->
             device.queue.writeBuffer(

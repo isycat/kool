@@ -12,7 +12,11 @@ class WgpuComputePipeline(
     backend: RenderBackendWgpu4k,
 ): WgpuPipeline(computePipeline, backend) {
 
-    private val gpuComputePipeline = createComputePipeline()
+    // Shared with every compute pipeline of the same code: its layout is made from the code, so theirs are the same.
+    private val gpuComputePipeline = backend.pipelineManager.sharedComputePipeline(
+        (computePipeline.shaderCode as RenderBackendWgpu4k.WebGpuComputeShaderCode).computeSrc,
+        ::createComputePipeline,
+    )
 
     private fun createComputePipeline(): GPUComputePipeline {
         return device.createComputePipeline(

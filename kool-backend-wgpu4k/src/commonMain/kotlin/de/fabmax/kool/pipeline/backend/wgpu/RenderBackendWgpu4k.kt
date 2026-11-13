@@ -351,6 +351,17 @@ abstract class RenderBackendWgpu4k(
         return GpuBufferWgpu(device.createBuffer(descriptor), descriptor.size.toLong(), info)
     }
 
+    /** How many times data has been given to the GPU's vertex, index, instance and storage buffers, and how many bytes. */
+    var bufferUploads = 0L
+        private set
+    var bufferUploadBytes = 0L
+        private set
+
+    override fun counted(bytes: Long) {
+        bufferUploads++
+        bufferUploadBytes += bytes
+    }
+
     override fun createTexture(descriptor: GPUTextureDescriptor): WgpuTextureResource {
         return WgpuTextureResource(descriptor, device.createTexture(descriptor))
     }

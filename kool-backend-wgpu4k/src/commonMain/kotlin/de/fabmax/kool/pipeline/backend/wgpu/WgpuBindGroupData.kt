@@ -69,6 +69,7 @@ class WgpuBindGroupData(
             val storage = storageBufferBindings[i]
             storage.binding.storageBuffer?.uploadData?.let { upload ->
                 storage.binding.storageBuffer?.uploadData = null
+                backend.counted(storage.gpuBuffer.size)
                 upload.asArrayBuffer { arrayBuffer ->
                     device.queue.writeBuffer(
                         buffer = storage.gpuBuffer.buffer,

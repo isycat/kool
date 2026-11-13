@@ -10,4 +10,7 @@ interface GPUBackend {
     fun createBuffer(descriptor: io.ygdrasil.webgpu.GPUBufferDescriptor, info: String?): GpuBufferWgpu
     fun createTexture(descriptor: GPUTextureDescriptor): WgpuTextureResource
 
+    /** Counts a buffer upload of [bytes] bytes. */
+    fun counted(bytes: Long) { }
+
 }
