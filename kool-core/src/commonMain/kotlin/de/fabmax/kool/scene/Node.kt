@@ -145,7 +145,10 @@ open class Node(name: String? = null) : BaseReleasable() {
         bounds.batchUpdate {
             clear()
             cachedChildren.clear()
-            cachedChildren.addAll(mutChildren)
+            // One by one: addAll copies the children into an array of its own first, every node, every frame.
+            for (i in mutChildren.indices) {
+                cachedChildren.add(mutChildren[i])
+            }
             for (i in cachedChildren.indices) {
                 val child = cachedChildren[i]
                 child.update(updateEvent)
