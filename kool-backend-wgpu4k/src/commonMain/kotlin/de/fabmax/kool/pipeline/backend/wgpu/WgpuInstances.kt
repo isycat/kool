@@ -18,6 +18,7 @@ class WgpuInstances(val instances: MeshInstanceList<*>, val backend: RenderBacke
         )
     }
     val instanceBuffer: GPUBuffer? get() = createdInstanceBuffer?.buffer?.buffer
+    internal val instanceGpuBuffer: GpuBufferWgpu? get() = createdInstanceBuffer?.buffer
 
     private var updateModCount = -1
 

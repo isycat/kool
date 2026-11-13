@@ -57,7 +57,9 @@ class WgpuBindGroupData(
                     device.queue.writeBuffer(
                         buffer = ubo.gpuBuffer.buffer,
                         bufferOffset = 0uL,
-                        data = arrayBuffer
+                        data = arrayBuffer,
+                        dataOffset = 0uL,
+                        size = ubo.gpuBuffer.wholeSize
                     )
                 }
             }

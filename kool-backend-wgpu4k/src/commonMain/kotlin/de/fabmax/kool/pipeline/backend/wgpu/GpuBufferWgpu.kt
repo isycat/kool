@@ -11,9 +11,14 @@ import io.ygdrasil.webgpu.GPUBuffer
 import io.ygdrasil.webgpu.GPUBufferUsage
 import io.ygdrasil.webgpu.GPUDevice
 
-class GpuBufferWgpu(val buffer: GPUBuffer, size: Long, info: String?) :
+class GpuBufferWgpu(val buffer: GPUBuffer, val size: Long, info: String?) :
     BaseReleasable(), GpuBufferImpl
 {
+    /**
+     * [size] as the bytes a bind or write of the whole buffer covers, boxed once. Left out, wgpu4k asks the native
+     * buffer for its size on every bind and write; given anew, it is boxed on every one.
+     */
+    val wholeSize: ULong? = size.toULong()
 
     private val bufferInfo = BufferInfo(buffer.label, info ?: "<none>").apply {
         allocated(size)

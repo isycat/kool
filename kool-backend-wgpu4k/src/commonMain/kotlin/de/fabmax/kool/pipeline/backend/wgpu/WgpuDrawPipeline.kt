@@ -193,9 +193,11 @@ class WgpuDrawPipeline(
         val gpuInsts = cmd.instanceData?.gpuInstances as WgpuInstances?
 
         var slot = 0u
-        gpuInsts?.instanceBuffer?.let { passEncoder.setVertexBuffer(slot++, it) }
-        gpuGeom.vertexBuffer?.let { passEncoder.setVertexBuffer(slot, it) }
-        passEncoder.setIndexBuffer(gpuGeom.indexBuffer, GPUIndexFormat.Uint32)
+        // Sizes given: wgpu4k would otherwise ask the native buffer for its size on every bind, every draw.
+        gpuInsts?.instanceGpuBuffer?.let { passEncoder.setVertexBuffer(slot++, it.buffer, 0uL, it.wholeSize) }
+        gpuGeom.vertexGpuBuffer?.let { passEncoder.setVertexBuffer(slot, it.buffer, 0uL, it.wholeSize) }
+        val indices = gpuGeom.indexGpuBuffer
+        passEncoder.setIndexBuffer(indices.buffer, GPUIndexFormat.Uint32, 0uL, indices.wholeSize)
         return true
     }
 }

@@ -104,11 +104,21 @@ class MultiPipelineBindGroupData(val scope: BindGroupScope) : BaseReleasable(), 
     @PublishedApi
     internal val bindGroupData = mutableMapOf<LongHash, UpdateAwareBindGroupData>()
 
+    // The layout asked for last and its data: a mesh is mostly drawn with one pipeline, and the map's key is boxed on
+    // every lookup, twice a draw, every frame.
+    private var lastLayout: BindGroupLayout? = null
+    private var lastData: UpdateAwareBindGroupData? = null
+
     @PublishedApi
     internal fun dataForPipeline(pipeline: PipelineBase): UpdateAwareBindGroupData {
         val layout = pipeline.bindGroupLayouts[scope]
+        val last = lastData
+        if (last != null && layout === lastLayout) return last
         return bindGroupData.getOrPut(layout.hash) {
             UpdateAwareBindGroupData(layout.createData().also { it.captureBuffer() })
+        }.also {
+            lastLayout = layout
+            lastData = it
         }
     }
 
@@ -123,6 +133,8 @@ class MultiPipelineBindGroupData(val scope: BindGroupScope) : BaseReleasable(), 
 
     fun discardPipelineData(pipeline: PipelineBase) {
         val layout = pipeline.bindGroupLayouts[scope]
+        lastLayout = null
+        lastData = null
         bindGroupData.remove(layout.hash)?.data?.release()
     }
 

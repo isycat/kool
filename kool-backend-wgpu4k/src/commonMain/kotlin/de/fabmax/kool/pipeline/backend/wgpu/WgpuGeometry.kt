@@ -18,6 +18,9 @@ class WgpuGeometry(val mesh: Mesh<*>, val vertexData: IndexedVertexList<*>, val 
     val indexBuffer: GPUBuffer get() = createdIndexBuffer.buffer.buffer
     val vertexBuffer: GPUBuffer? get() = createdVertexBuffer?.buffer?.buffer
 
+    internal val indexGpuBuffer: GpuBufferWgpu get() = createdIndexBuffer.buffer
+    internal val vertexGpuBuffer: GpuBufferWgpu? get() = createdVertexBuffer?.buffer
+
     private var updateModCount = -1
 
     init {
