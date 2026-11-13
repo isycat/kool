@@ -95,7 +95,7 @@ private suspend fun canvasBackend(ctx: KoolContext, wgpu: WGPU, swing: SwingWind
 private fun headlessBackend(ctx: KoolContext, wgpu: WGPU, subsystem: HeadlessWindowSubsystem): RenderBackendWgpu4k {
     val window = subsystem.createWindow(ClientApi.UNMANAGED, null, ctx as Lwjgl3Context) as HeadlessWindow
     lateinit var backend: RenderBackendWgpu4k
-    val target = HeadlessTarget(window) { backend.device }
+    val target = HeadlessTarget(window, { backend.device }, { backend.waitingMaps++ })
     backend = DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(target), KoolSystem.configJvm.numSamples) {
         // No surface to be compatible with: any adapter that can render will do.
         wgpu.requestAdapter(NativeSurface(WGPUSurface(NativeAddress(MemorySegment.NULL)))) ?: error("no WebGPU adapter on this machine")
@@ -109,6 +109,11 @@ internal class DesktopRenderBackendWgpu4kWebGpu(
     numSamples: Int,
     adapterProvider: suspend () -> GPUAdapter
 ) : RenderBackendWgpu4k(ctx, surface, numSamples, adapterProvider), RenderBackendJvm {
+    // wgpu-native 25 on Windows never finishes a submission whose passes write timestamps: no poll of the device comes
+    // back idle after one, and anything waited for later (a frame read back) times out and ends the process (seen
+    // 2026-11-13, D3D12, RTX 4080). The GPU's per-pass times are therefore not measured on the desktop.
+    override val isTimestampQueryUsable: Boolean = false
+
     override val window: KoolWindowJvm
         get() = surface.target.window
 

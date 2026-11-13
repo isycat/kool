@@ -37,6 +37,9 @@ abstract class RenderBackendWgpu4k(
     val adapterProvider: suspend () -> GPUAdapter
 ) : RenderBackend, GPUBackend {
     override val name: String = "wgpu4k"
+
+    /** Whether GPU timestamps may be asked for: where a frame that writes them is never finished, they are not. */
+    protected open val isTimestampQueryUsable: Boolean = true
     override val apiName: String = "WebGPU"
     override val deviceName: String = "wgpu4k"
     override val deviceCoordinates: DeviceCoordinates = DeviceCoordinates.WEB_GPU
@@ -59,6 +62,13 @@ abstract class RenderBackendWgpu4k(
         private set
     internal val timestampQuery: WgpuTimestamps by lazy { WgpuTimestamps(128, this) }
 
+    /**
+     * How many times the render thread has waited for the GPU to map a buffer: wgpu4k's mapAsync polls the device until
+     * it is idle. Only what is read back for a caller who waits for it does: a frame copied to the host, a readback.
+     */
+    var waitingMaps = 0
+        internal set
+
     val pipelineManager = WgpuPipelineManager(this)
     internal val screenPass = WgpuScreenPass(this, numSamples)
 
@@ -78,7 +88,7 @@ abstract class RenderBackendWgpu4k(
         availableFeatures.forEach { logD { it.name } }
 
         val requiredFeatures = mutableListOf<GPUFeatureName>()
-        if (GPUFeatureName.TimestampQuery in availableFeatures) {
+        if (isTimestampQueryUsable && GPUFeatureName.TimestampQuery in availableFeatures) {
             logI { "Enabling WebGPU timestamp-query feature" }
             requiredFeatures.add(GPUFeatureName.TimestampQuery)
             isTimestampQuerySupported = true
@@ -304,6 +314,7 @@ abstract class RenderBackendWgpu4k(
     private suspend fun mapReadbacks() {
         gpuReadbacks.filterIsInstance<ReadbackStorageBuffer>().filter { it.mapBuffer != null }.forEach { readback ->
             val mapBuffer = readback.mapBuffer!!
+            waitingMaps++
             mapBuffer.mapAsync(setOf(GPUMapMode.Read)).onSuccess {
                 mapBuffer.getMappedRange()
                     .writeInto(readback.resultBuffer)
@@ -315,6 +326,7 @@ abstract class RenderBackendWgpu4k(
 
         gpuReadbacks.filterIsInstance<ReadbackTexture>().filter { it.mapBuffer != null }.forEach { readback ->
             val mapBuffer = readback.mapBuffer!!
+            waitingMaps++
             mapBuffer.mapAsync(setOf(GPUMapMode.Read)).onSuccess {
                 val gpuTex = readback.texture.gpuTexture as WgpuTextureResource
                 val format = readback.texture.format

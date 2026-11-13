@@ -18,7 +18,11 @@ import java.lang.foreign.MemorySegment
  * render call returns; otherwise it is delivered with the next frame, so its copy runs while that frame renders. The
  * listeners read the mapped buffer itself: no copy on the host.
  */
-internal class HeadlessTarget(private val headless: HeadlessWindow, private val device: () -> GPUDevice) : SurfaceTarget {
+internal class HeadlessTarget(
+    private val headless: HeadlessWindow,
+    private val device: () -> GPUDevice,
+    private val waited: () -> Unit = { },
+) : SurfaceTarget {
     private val subsystem = headless.subsystem
 
     override val window: KoolWindowJvm get() = headless
@@ -98,6 +102,7 @@ internal class HeadlessTarget(private val headless: HeadlessWindow, private val 
         val pending = checkNotNull(slot.pending)
         slot.pending = null
         val size = slot.rowStride.toLong() * slot.height
+        waited()
         slot.buffer.mapAsync(setOf(GPUMapMode.Read), 0u, size.toULong()).getOrThrow()
         val mapped = slot.buffer.getMappedRange(0u, size.toULong())
         val pixels = MemorySegment.ofAddress(mapped.rawPointer.toLong()).reinterpret(size).asByteBuffer().asReadOnlyBuffer()
