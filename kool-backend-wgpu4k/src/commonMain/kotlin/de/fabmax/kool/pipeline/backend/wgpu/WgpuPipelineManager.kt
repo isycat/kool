@@ -15,7 +15,9 @@ class WgpuPipelineManager(val backend: RenderBackendWgpu4k) {
 
     /**
      * The GPU's pipelines, one for each different way of drawing or computing: kool pipelines of the same code, layout,
-     * state and targets share one, so a shader made again, as for each batch of a model, compiles nothing again.
+     * state and targets share one, so a shader made again, as for each batch of a model, compiles nothing again. They
+     * are kept for the device's life, as are shader modules, though nothing uses them for a while: an app has a bounded
+     * few ways of drawing, and one made once (as a warm-up makes them) is never compiled again.
      */
     private val renderPipelines = HashMap<Any, SharedPipeline<GPURenderPipeline>>()
     private val computePipelines = HashMap<String, SharedPipeline<GPUComputePipeline>>()
@@ -33,8 +35,7 @@ class WgpuPipelineManager(val backend: RenderBackendWgpu4k) {
         }.also { it.users++ }.pipeline
 
     internal fun releaseRenderPipeline(key: Any) {
-        val shared = renderPipelines[key] ?: return
-        if (--shared.users == 0) renderPipelines.remove(key)
+        renderPipelines[key]?.let { it.users-- }
     }
 
     internal fun sharedComputePipeline(key: String, make: () -> GPUComputePipeline): GPUComputePipeline =
@@ -44,8 +45,7 @@ class WgpuPipelineManager(val backend: RenderBackendWgpu4k) {
         }.also { it.users++ }.pipeline
 
     private fun releaseComputePipeline(key: String) {
-        val shared = computePipelines[key] ?: return
-        if (--shared.users == 0) computePipelines.remove(key)
+        computePipelines[key]?.let { it.users-- }
     }
 
     private class SharedPipeline<T>(val pipeline: T) {
@@ -144,15 +144,9 @@ class WgpuPipelineManager(val backend: RenderBackendWgpu4k) {
 
         vertexShaderModules[shaderCode.vertexSrc]?.let { usedModule ->
             usedModule.users -= pipeline.drawPipeline
-            if (usedModule.users.isEmpty()) {
-                vertexShaderModules.remove(shaderCode.vertexSrc)
-            }
         }
         fragmentShaderModules[shaderCode.fragmentSrc]?.let { usedModule ->
             usedModule.users -= pipeline.drawPipeline
-            if (usedModule.users.isEmpty()) {
-                fragmentShaderModules.remove(shaderCode.fragmentSrc)
-            }
         }
     }
 
@@ -163,9 +157,6 @@ class WgpuPipelineManager(val backend: RenderBackendWgpu4k) {
 
         computeShaderModules[shaderCode.computeSrc]?.let { usedModule ->
             usedModule.users -= pipeline.computePipeline
-            if (usedModule.users.isEmpty()) {
-                computeShaderModules.remove(shaderCode.computeSrc)
-            }
         }
     }
 
