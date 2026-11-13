@@ -137,7 +137,9 @@ class WgslGenerator private constructor(
 
         src.appendLine("@compute")
         src.appendLine("@workgroup_size(${computeStage.workGroupSize.x}, ${computeStage.workGroupSize.y}, ${computeStage.workGroupSize.z})")
-        src.appendLine("fn computeMain(computeInput: ComputeInput) {")
+        // A stage that reads no built-in input has no input struct: generateStruct writes none for no members.
+        val inputParam = if (computeInput.hasMembers) "computeInput: ComputeInput" else ""
+        src.appendLine("fn computeMain($inputParam) {")
         src.appendLine(computeInput.addWorkGroupSizeDef().prependIndent(blockIndent))
         src.appendLine(generateScope(main.childScopes.first(), blockIndent))
         src.appendLine("}")
@@ -1005,6 +1007,8 @@ class WgslGenerator private constructor(
         val numWorkGroups = if (stage.isUsingNumWorkGroups) {
             WgslStructMember("computeInput", KslComputeStage.NAME_IN_NUM_WORK_GROUPS, "vec3u", "@builtin(num_workgroups) ")
         } else null
+
+        val hasMembers: Boolean get() = listOfNotNull(globalInvocationId, localInvocationId, workGroupId, numWorkGroups).isNotEmpty()
 
         fun generateStruct(builder: StringBuilder) = builder.apply {
             generateStruct("ComputeInput", emptyList(), globalInvocationId, localInvocationId, workGroupId, numWorkGroups)
