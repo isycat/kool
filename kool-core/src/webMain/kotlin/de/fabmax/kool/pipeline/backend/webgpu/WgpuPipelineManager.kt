@@ -11,6 +11,33 @@ class WgpuPipelineManager(val backend: RenderBackendWebGpu) {
     private val fragmentShaderModules = mutableMapOf<String, UsedShaderModule>()
     private val computeShaderModules = mutableMapOf<String, UsedShaderModule>()
 
+    /**
+     * The GPU's pipelines, one for each different way of drawing or computing: kool pipelines of the same code, layout,
+     * state and targets share one, so a shader made again, as for each batch of a model, compiles nothing again. They
+     * are kept for the device's life, as are shader modules, though nothing uses them for a while: an app has a bounded
+     * few ways of drawing, and one made once (as a warm-up makes them) is never compiled again.
+     */
+    private val renderPipelines = HashMap<Any, GPURenderPipeline>()
+    private val computePipelines = HashMap<String, GPUComputePipeline>()
+
+    /** How many GPU pipelines, and shader modules, have been made since this was made: the GPU compiles each. */
+    var pipelinesMade = 0
+        private set
+    var shaderModulesMade = 0
+        private set
+
+    internal fun sharedRenderPipeline(key: Any, make: () -> GPURenderPipeline): GPURenderPipeline =
+        renderPipelines.getOrPut(key) {
+            pipelinesMade++
+            make()
+        }
+
+    internal fun sharedComputePipeline(key: String, make: () -> GPUComputePipeline): GPUComputePipeline =
+        computePipelines.getOrPut(key) {
+            pipelinesMade++
+            make()
+        }
+
     fun prepareDrawPipeline(cmd: DrawCommand) {
         cmd.pipeline.getWgpuPipeline().updateGeometry(cmd)
     }
@@ -41,6 +68,7 @@ class WgpuPipelineManager(val backend: RenderBackendWebGpu) {
     private fun getOrCreateVertexShaderModule(pipeline: DrawPipeline): GPUShaderModule {
         val shaderCode = pipeline.shaderCode as WebGpuShaderCode
         val usedModule = vertexShaderModules.getOrPut(shaderCode.vertexSrc) {
+            shaderModulesMade++
             val desc = GPUShaderModuleDescriptor(
                 label = "${pipeline.name} vertex shader",
                 code = shaderCode.vertexSrc
@@ -56,6 +84,7 @@ class WgpuPipelineManager(val backend: RenderBackendWebGpu) {
     private fun getOrCreateFragmentShaderModule(pipeline: DrawPipeline): GPUShaderModule {
         val shaderCode = pipeline.shaderCode as WebGpuShaderCode
         val usedModule = fragmentShaderModules.getOrPut(shaderCode.fragmentSrc) {
+            shaderModulesMade++
             val desc = GPUShaderModuleDescriptor(
                 label = "${pipeline.name} fragment shader",
                 code = shaderCode.fragmentSrc
@@ -70,7 +99,8 @@ class WgpuPipelineManager(val backend: RenderBackendWebGpu) {
 
     private fun getOrCreateComputeShaderModule(pipeline: ComputePipeline): GPUShaderModule {
         val shaderCode = pipeline.shaderCode as WebGpuComputeShaderCode
-        val usedModule = fragmentShaderModules.getOrPut(shaderCode.computeSrc) {
+        val usedModule = computeShaderModules.getOrPut(shaderCode.computeSrc) {
+            shaderModulesMade++
             val desc = GPUShaderModuleDescriptor(
                 label = "${pipeline.name} compute shader",
                 code = shaderCode.computeSrc
@@ -109,15 +139,9 @@ class WgpuPipelineManager(val backend: RenderBackendWebGpu) {
 
         vertexShaderModules[shaderCode.vertexSrc]?.let { usedModule ->
             usedModule.users -= pipeline.drawPipeline
-            if (usedModule.users.isEmpty()) {
-                vertexShaderModules.remove(shaderCode.vertexSrc)
-            }
         }
         fragmentShaderModules[shaderCode.fragmentSrc]?.let { usedModule ->
             usedModule.users -= pipeline.drawPipeline
-            if (usedModule.users.isEmpty()) {
-                fragmentShaderModules.remove(shaderCode.fragmentSrc)
-            }
         }
     }
 
@@ -127,9 +151,6 @@ class WgpuPipelineManager(val backend: RenderBackendWebGpu) {
 
         computeShaderModules[shaderCode.computeSrc]?.let { usedModule ->
             usedModule.users -= pipeline.computePipeline
-            if (usedModule.users.isEmpty()) {
-                vertexShaderModules.remove(shaderCode.computeSrc)
-            }
         }
     }
 

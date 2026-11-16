@@ -35,6 +35,7 @@ internal class WgpuGrowingBuffer(
 
     fun writeData(data: Float32Buffer) {
         checkSize(data.limit * 4L)
+        backend.work.counted(data.limit * 4L)
         device.queue.writeBuffer(
             buffer = buffer.buffer,
             bufferOffset = 0.toJsNumber(),
@@ -46,6 +47,7 @@ internal class WgpuGrowingBuffer(
 
     fun writeData(data: Int32Buffer) {
         checkSize(data.limit * 4L)
+        backend.work.counted(data.limit * 4L)
         device.queue.writeBuffer(
             buffer = buffer.buffer,
             bufferOffset = 0.toJsNumber(),
@@ -57,6 +59,7 @@ internal class WgpuGrowingBuffer(
 
     fun writeData(data: MixedBuffer) {
         checkSize(data.limit * 4L)
+        backend.work.counted(data.limit * 4L)
         device.queue.writeBuffer(
             buffer = buffer.buffer,
             bufferOffset = 0.toJsNumber(),

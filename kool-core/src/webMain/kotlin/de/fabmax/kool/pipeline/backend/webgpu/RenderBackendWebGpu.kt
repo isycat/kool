@@ -34,6 +34,9 @@ expect class RenderBackendWebGpu : RenderBackend {
     internal val timestampQuery: WgpuTimestamps
     val isTimestampQuerySupported: Boolean
     val pipelineManager: WgpuPipelineManager
+
+    /** The buffer uploads given to the GPU, counted. */
+    val work: WgpuWork
     internal val textureLoader: WgpuTextureLoader
     val clearHelper: ClearHelper
 

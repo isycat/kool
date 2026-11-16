@@ -66,6 +66,7 @@ class WgpuBindGroupData(
             val storage = storageBufferBindings[i]
             storage.binding.storageBuffer?.uploadData?.let { upload ->
                 storage.binding.storageBuffer?.uploadData = null
+                storage.binding.storageBuffer?.let { backend.work.counted(it.size.toLong() * it.type.byteSize) }
                 val hostBuffer = when (upload) {
                     is Uint8BufferImpl -> upload.buffer
                     is Uint16BufferImpl -> upload.buffer

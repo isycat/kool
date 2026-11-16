@@ -11,6 +11,19 @@ class WgpuDrawPipeline(
 
     private val pipelines = mutableMapOf<WgpuRenderPass, GPURenderPipeline>()
 
+    /** All that makes a GPU pipeline what it is: the kool pipeline's code, layout and state, and the pass's targets. */
+    private data class RenderPipelineKey(
+        val pipeline: Any,
+        val blend: BlendMode,
+        val autoReverse: Boolean,
+        val mirrored: Boolean,
+        val depth: DepthMode,
+        val hasDepth: Boolean,
+        val colors: List<GPUTextureFormat>,
+        val depthFormat: GPUTextureFormat?,
+        val samples: Int,
+    )
+
     private fun createVertexBufferLayout(): List<GPUVertexBufferLayout> {
         val bindings = drawPipeline.vertexLayout.bindings.filter { it.vertexAttributes.isNotEmpty() }
         return bindings
@@ -175,7 +188,23 @@ class WgpuDrawPipeline(
             return false
         }
 
-        val pipeline = pipelines.getOrPut(passEncoderState.gpuRenderPass) { createPipeline(passEncoderState) }
+        val pipeline = pipelines.getOrPut(passEncoderState.gpuRenderPass) {
+            val renderPass = passEncoderState.renderPass
+            val gpuPass = passEncoderState.gpuRenderPass
+            val key = RenderPipelineKey(
+                drawPipeline.pipelineHash,
+                drawPipeline.pipelineConfig.blendMode,
+                drawPipeline.autoReverseDepthFunc,
+                renderPass.isMirrorY,
+                renderPass.depthMode,
+                renderPass.hasDepth,
+                gpuPass.colorTargetFormats,
+                gpuPass.depthFormat,
+                gpuPass.numSamples,
+            )
+            // Shared with every kool pipeline drawing the same way into such a pass: the GPU compiles it once.
+            backend.pipelineManager.sharedRenderPipeline(key) { createPipeline(passEncoderState) }
+        }
         passEncoderState.setPipeline(pipeline)
 
         viewData.getOrCreateWgpuData().bind(passEncoderState)

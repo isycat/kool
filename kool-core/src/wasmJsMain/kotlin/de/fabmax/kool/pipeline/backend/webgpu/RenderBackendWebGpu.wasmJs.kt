@@ -54,6 +54,7 @@ actual class RenderBackendWebGpu(val ctx: WasmContext) : RenderBackend {
     internal actual val timestampQuery: WgpuTimestamps by lazy { WgpuTimestamps(128, this) }
 
     actual val pipelineManager = WgpuPipelineManager(this)
+    actual val work = WgpuWork()
     private val screenPass = WgpuScreenPass(this)
 
     private var renderSize = Vec2i(canvas.width, canvas.height)
