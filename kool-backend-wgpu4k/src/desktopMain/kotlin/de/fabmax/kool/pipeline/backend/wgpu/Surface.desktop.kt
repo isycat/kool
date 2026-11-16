@@ -76,7 +76,7 @@ internal fun NativeSurface.presentModes(adapter: Adapter): Set<PresentMode> = me
     val capabilities = WGPUSurfaceCapabilities.allocate(scope)
     wgpuSurfaceGetCapabilities(handler, adapter.handler, capabilities)
     val count = capabilities.presentModeCount.toLong()
-    val listed = capabilities.presentModes?.handler?.takeIf { it != MemorySegment.NULL } ?: return@memoryScope emptySet()
+    val listed = capabilities.presentModes?.handler?.handler?.takeIf { it != MemorySegment.NULL } ?: return@memoryScope emptySet()
     val modes = listed.reinterpret(count * Int.SIZE_BYTES)
     (0 until count).mapNotNull { PresentMode.of(modes.getAtIndex(ValueLayout.JAVA_INT, it).toUInt()) }.toSet()
 }

@@ -7,6 +7,7 @@ import io.ygdrasil.webgpu.GPUCommandEncoder
 import io.ygdrasil.webgpu.GPUTexture
 import io.ygdrasil.webgpu.GPUTextureFormat
 import io.ygdrasil.webgpu.GPUTextureView
+import io.ygdrasil.webgpu.PresentMode
 import io.ygdrasil.webgpu.SurfaceConfiguration
 import kotlin.time.Duration
 

@@ -186,6 +186,16 @@ abstract class RenderBackendWgpu4k(
     var presentMode: PresentMode = PresentMode.Fifo
         private set
 
+    /** Whether frames are presented as the newest at each refresh (Mailbox) where the surface offers it: false asks for Fifo. */
+    var mailboxWanted: Boolean
+        get() = PresentMode.Mailbox in presentModesWanted
+        set(value) {
+            presentModesWanted = if (value) listOf(PresentMode.Mailbox, PresentMode.Fifo) else listOf(PresentMode.Fifo)
+        }
+
+    /** The name of [presentMode], for those who do not see the WebGPU binding's types. */
+    val presentModeName: String get() = presentMode.name
+
     /**
      * Configures the surface for [size], which has an area: before its first frame, whenever its size changes, and
      * [again] where it gave no texture as it was.
