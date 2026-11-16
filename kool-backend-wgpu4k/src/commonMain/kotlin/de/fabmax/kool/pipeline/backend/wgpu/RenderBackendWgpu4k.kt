@@ -380,7 +380,7 @@ abstract class RenderBackendWgpu4k(
                 readback.deferred.completeExceptionally(IllegalStateException("Failed reading texture"))
             } else {
                 val format = readback.texture.format
-                val size = format.pxSize.toLong() * gpuTex.width * gpuTex.height * gpuTex.depth
+                val size = paddedRow(format.pxSize * gpuTex.width).toLong() * gpuTex.height * gpuTex.depth
                 val mapBuffer = device.createBuffer(
                     BufferDescriptor(
                         label = "texture-readback",
@@ -392,7 +392,8 @@ abstract class RenderBackendWgpu4k(
                     source = TexelCopyTextureInfo(gpuTex.gpuTexture),
                     destination = TexelCopyBufferInfo(
                         buffer = mapBuffer,
-                        bytesPerRow = (format.pxSize * gpuTex.width).toUInt(),
+                        // A copy's rows are a whole number of 256 bytes apart (COPY_BYTES_PER_ROW_ALIGNMENT).
+                        bytesPerRow = paddedRow(format.pxSize * gpuTex.width).toUInt(),
                         rowsPerImage = gpuTex.height.toUInt()
                     ),
                     copySize = Extent3D(gpuTex.width.toUInt(), gpuTex.height.toUInt(), gpuTex.depth.toUInt())
@@ -422,8 +423,26 @@ abstract class RenderBackendWgpu4k(
                 val gpuTex = readback.texture.gpuTexture as WgpuTextureResource
                 val format = readback.texture.format
                 val dst = ImageData.createBuffer(format, gpuTex.width, gpuTex.height, gpuTex.depth)
-                mapBuffer.getMappedRange()
-                    .writeInto(dst)
+                val row = format.pxSize * gpuTex.width
+                val padded = paddedRow(row)
+                if (padded == row) {
+                    mapBuffer.getMappedRange().writeInto(dst)
+                } else {
+                    // The rows as copied, each padded, taken without their padding.
+                    val rows = gpuTex.height * gpuTex.depth
+                    val all = Uint8Buffer(padded * rows)
+                    mapBuffer.getMappedRange().writeInto(all)
+                    val bytes = dst as? Uint8Buffer
+                    if (bytes == null) {
+                        mapBuffer.unmap()
+                        mapBuffer.close()
+                        readback.deferred.completeExceptionally(IllegalStateException("Only 8-bit textures are read back with padded rows"))
+                        return@onSuccess
+                    }
+                    for (r in 0 until rows) {
+                        for (b in 0 until row) bytes[r * row + b] = all[r * padded + b]
+                    }
+                }
                 mapBuffer.unmap()
                 mapBuffer.close()
                 when (readback.texture) {
@@ -462,6 +481,9 @@ abstract class RenderBackendWgpu4k(
     private class ReadbackStorageBuffer(val storage: GpuBuffer, val deferred: CompletableDeferred<Unit>, val resultBuffer: Buffer) : GpuReadback {
         var mapBuffer: GPUBuffer? = null
     }
+
+    /** [bytes] rounded up to the 256 a texture copy's rows must be apart. */
+    private fun paddedRow(bytes: Int): Int = (bytes + COPY_ROW_ALIGNMENT - 1) / COPY_ROW_ALIGNMENT * COPY_ROW_ALIGNMENT
 
     private class ReadbackTexture(val texture: Texture<*>, val deferred: CompletableDeferred<ImageData>) : GpuReadback {
         var mapBuffer: GPUBuffer? = null
@@ -505,3 +527,5 @@ abstract class RenderBackendWgpu4k(
         }
     }
 }
+/** How many bytes apart the rows of a texture copied to a buffer must be. */
+private const val COPY_ROW_ALIGNMENT = 256
