@@ -192,14 +192,14 @@ abstract class WgpuRenderPass(
         val size: Vec2i,
     ) : BaseReleasable() {
         val colorImages = colorFormats.map { format ->
-            createImage(size.x, size.y, numSamples, format)
+            createImage(size.x, size.y, numSamples, format, isColor = true)
         }
         val depthImage = depthFormat?.let { format ->
             createImage(size.x, size.y, numSamples, format)
         }
 
         val resolveColorImages = if (!isMultiSampled) emptyList() else colorFormats.map { format ->
-            createImage(size.x, size.y, 1, format)
+            createImage(size.x, size.y, 1, format, isColor = true)
         }
         val isResolveDepth = isMultiSampled && parentPass.depthAttachment is RenderPassDepthTextureAttachment<*>
         val resolveDepthImage = if (!isResolveDepth) null else depthFormat?.let { format ->
@@ -228,8 +228,10 @@ abstract class WgpuRenderPass(
             }
         }
 
-        private fun createImage(width: Int, height: Int, samples: Int, format: GPUTextureFormat): WgpuTextureResource {
-            val usage = when (isCopySrc) {
+        private fun createImage(width: Int, height: Int, samples: Int, format: GPUTextureFormat, isColor: Boolean = false): WgpuTextureResource {
+            // A single-sampled colour image can always be copied from: what a pass drew may be read back
+            // (downloadTextureData) without the pass being made again, which loses it. Depth formats may not be.
+            val usage = when (isCopySrc || (isColor && samples == 1)) {
                 true -> setOf(GPUTextureUsage.TextureBinding, GPUTextureUsage.RenderAttachment, GPUTextureUsage.CopySrc)
                 else -> setOf(GPUTextureUsage.TextureBinding, GPUTextureUsage.RenderAttachment)
             }
