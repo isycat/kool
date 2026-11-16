@@ -15,6 +15,9 @@ actual class WgpuSurface(private val handler: WGPUCanvasContext) : AutoCloseable
     actual val supportedAlphaMode: Set<CompositeAlphaMode> =
         setOf(CompositeAlphaMode.Opaque, CompositeAlphaMode.Premultiplied)
 
+    // A canvas presents as the browser does: it is not asked how.
+    actual val presentModes: Set<PresentMode> = emptySet()
+
     actual val format: GPUTextureFormat
         get() = navigator.gpu?.getPreferredCanvasFormat()
             ?.let { GPUTextureFormat.of(it) ?: error("Unsupported surface format: $it") }

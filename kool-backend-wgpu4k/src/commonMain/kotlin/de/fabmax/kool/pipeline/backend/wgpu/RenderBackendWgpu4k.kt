@@ -175,19 +175,44 @@ abstract class RenderBackendWgpu4k(
     private var isSurfaceLate = false
 
     /**
+     * How frames are presented, the first of these the surface offers: Mailbox by default, which shows the newest
+     * frame at each refresh and never waits for one, so a frame drawn in under a refresh is shown at the next; Fifo,
+     * which every surface offers, queues frames and waits while its queue is full. Taken up when the surface is next
+     * configured.
+     */
+    var presentModesWanted: List<PresentMode> = listOf(PresentMode.Mailbox, PresentMode.Fifo)
+
+    /** How frames are presented now: the mode the surface was last configured with; Fifo where it offers no other. */
+    var presentMode: PresentMode = PresentMode.Fifo
+        private set
+
+    /** Whether frames are presented as the newest at each refresh (Mailbox) where the surface offers it: false asks for Fifo. */
+    var mailboxWanted: Boolean
+        get() = PresentMode.Mailbox in presentModesWanted
+        set(value) {
+            presentModesWanted = if (value) listOf(PresentMode.Mailbox, PresentMode.Fifo) else listOf(PresentMode.Fifo)
+        }
+
+    /** The name of [presentMode], for those who do not see the WebGPU binding's types. */
+    val presentModeName: String get() = presentMode.name
+
+    /**
      * Configures the surface for [size], which has an area: before its first frame, whenever its size changes, and
      * [again] where it gave no texture as it was.
      */
     private fun configureSurface(size: Vec2i, again: Boolean = false) {
         renderSize = size
         if (again) surfaceAsks = surfaceAsks.copy(configuredAgain = surfaceAsks.configuredAgain + 1)
+        val offered = surface.presentModes
+        presentMode = presentModesWanted.firstOrNull { it in offered } ?: PresentMode.Fifo
         surface.configure(
             SurfaceConfiguration(
                 device,
                 surface.format,
                 // Copied from where the screen pass renders it with one sample per pixel (frame copies).
                 usage = setOf(GPUTextureUsage.RenderAttachment, GPUTextureUsage.CopySrc),
-                viewFormats = setOf(surface.format)
+                viewFormats = setOf(surface.format),
+                presentMode = presentMode,
             ),
             size
         )

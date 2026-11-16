@@ -7,6 +7,7 @@ import io.ygdrasil.webgpu.GPUCommandEncoder
 import io.ygdrasil.webgpu.GPUTexture
 import io.ygdrasil.webgpu.GPUTextureFormat
 import io.ygdrasil.webgpu.GPUTextureView
+import io.ygdrasil.webgpu.PresentMode
 import io.ygdrasil.webgpu.SurfaceConfiguration
 import kotlin.time.Duration
 
@@ -58,6 +59,9 @@ expect class WgpuSurface: AutoCloseable {
 
     val supportedAlphaMode: Set<CompositeAlphaMode>
     val format: GPUTextureFormat
+
+    /** How the surface can present frames, as its capabilities list them; none where it does not say. */
+    val presentModes: Set<PresentMode>
 
     /**
      * Takes the texture the next frame is drawn into, and says whether there is one: a window's surface has none to
