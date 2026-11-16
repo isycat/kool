@@ -45,6 +45,11 @@ internal class HeadlessTarget(
     /** The size the target was last configured for: as a window's surface does, its texture has that size, whatever the window's is now. */
     private var configuredSize = headless.framebufferSize
 
+    // The texture is this target's own: there is one for every frame, but for those a test has refused.
+    override fun acquire(): Boolean = !headless.takeRefusal()
+
+    override fun discard() { }
+
     override fun getCurrentTexture(): GPUTexture {
         val (width, height) = configuredSize
         val kept = texture?.takeIf { it.width.toInt() == width && it.height.toInt() == height }

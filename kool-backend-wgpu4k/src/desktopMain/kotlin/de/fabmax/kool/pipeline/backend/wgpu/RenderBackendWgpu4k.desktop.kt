@@ -3,12 +3,15 @@ package de.fabmax.kool.pipeline.backend.wgpu
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.platform.win32.Kernel32
+import com.sun.jna.platform.win32.User32
+import com.sun.jna.platform.win32.WinDef
 import darwin.CAMetalLayer
 import darwin.NSWindow
 import de.fabmax.kool.FrameData
 import de.fabmax.kool.KoolContext
 import de.fabmax.kool.KoolSystem
 import de.fabmax.kool.configJvm
+import de.fabmax.kool.math.Vec2i
 import de.fabmax.kool.pipeline.backend.RenderBackendJvm
 import de.fabmax.kool.platform.ClientApi
 import de.fabmax.kool.platform.Lwjgl3Context
@@ -81,7 +84,7 @@ private suspend fun canvasBackend(ctx: KoolContext, wgpu: WGPU, swing: SwingWind
     val window = swing.createWindow(ClientApi.UNMANAGED, null, ctx as Lwjgl3Context)
     val hinstance = Kernel32.INSTANCE.GetModuleHandle(null).pointer.toNativeAddress()
     var adapter: io.ygdrasil.webgpu.Adapter? = null
-    val target = FollowingTarget(window, { Pointer.nativeValue(Native.getComponentPointer(canvas)) }) { hwnd ->
+    val target = FollowingTarget(window, { Pointer.nativeValue(Native.getComponentPointer(canvas)) }, ::clientSizeOf) { hwnd ->
         val surface = wgpu.getSurfaceFromWindows(hinstance, hwnd.toNativeAddress()) ?: error("fail to get surface of the canvas")
         val compatible = adapter ?: runBlocking { wgpu.requestAdapter(surface) }.also { adapter = it } ?: error("fail to get adapter")
         // Get supported format and opacity on surface
@@ -89,6 +92,20 @@ private suspend fun canvasBackend(ctx: KoolContext, wgpu: WGPU, swing: SwingWind
         surface
     }
     return DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(target), KoolSystem.configJvm.numSamples) { checkNotNull(adapter) }
+}
+
+/**
+ * The size of the native window [hwnd]'s own area in pixels, as Windows has it now: what a surface on it must be
+ * configured for. AWT hears of a new size only later, on its own thread, and a surface configured for the size AWT
+ * still has is out of date at once. Nothing by nothing while the window is minimized; null where Windows does not say.
+ */
+private fun clientSizeOf(hwnd: Long): Vec2i? {
+    val area = WinDef.RECT()
+    return if (hwnd != 0L && User32.INSTANCE.GetClientRect(WinDef.HWND(Pointer(hwnd)), area)) {
+        Vec2i(area.right - area.left, area.bottom - area.top)
+    } else {
+        null
+    }
 }
 
 /** Renders without a window: into an offscreen texture, read back for the headless subsystem's listeners. */

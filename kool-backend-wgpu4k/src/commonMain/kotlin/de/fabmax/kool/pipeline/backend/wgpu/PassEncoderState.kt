@@ -89,6 +89,27 @@ class RenderPassEncoderState(val backend: RenderBackendWgpu4k): PassEncoderState
         backend.device.queue.submit(listOf(cmdBuffer))
     }
 
+    /**
+     * Drops a frame that failed before it was submitted: its pass and its encoder are let go, so the next frame starts
+     * from nothing rather than ending a pass of an encoder that is gone, which the GPU refuses.
+     */
+    fun abandonFrame() {
+        if (isPassActive) {
+            runCatching { _passEncoder?.end() }
+            isPassActive = false
+        }
+        _gpuRenderPass = null
+        _renderPass = null
+        _passEncoder = null
+        _encoder = null
+        mipLevel = 0
+        layer = 0
+        activePipeline = null
+        for (i in bindGroups.indices) {
+            bindGroups[i] = null
+        }
+    }
+
     fun beginRenderPass(
         renderPass: RenderPass,
         gpuRenderPass: WgpuRenderPass,

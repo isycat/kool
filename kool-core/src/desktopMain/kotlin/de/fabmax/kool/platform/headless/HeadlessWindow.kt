@@ -96,6 +96,17 @@ class HeadlessWindow internal constructor(
         requestedSize.set(SizeRequest(valid, parentScreenScale, isApplied = true))
     }
 
+    private val refusals = java.util.concurrent.atomic.AtomicInteger()
+
+    /**
+     * Has the next [count] asks for a texture to draw a frame into refused, as a native window's surface refuses while
+     * it is out of date or lost: for tests of what a renderer does with a frame it cannot draw.
+     */
+    fun refuseTextures(count: Int) = refusals.set(count)
+
+    /** Whether this ask for a texture to draw into is one of those to refuse. */
+    fun takeRefusal(): Boolean = refusals.getAndUpdate { (it - 1).coerceAtLeast(0) } > 0
+
     override fun setSizeOnScreen(size: Vec2i) {
         setSize(Vec2i((size.x * parentScreenScale).roundToInt(), (size.y * parentScreenScale).roundToInt()))
     }

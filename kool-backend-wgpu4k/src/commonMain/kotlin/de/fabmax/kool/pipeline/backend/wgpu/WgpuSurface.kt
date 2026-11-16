@@ -20,8 +20,17 @@ expect class WgpuSurface: AutoCloseable {
     val supportedAlphaMode: Set<CompositeAlphaMode>
     val format: GPUTextureFormat
 
-    /** The texture the screen pass renders this frame's image into. */
+    /**
+     * Takes the texture the next frame is drawn into, and says whether there is one: a window's surface has none to
+     * give while it is out of date, lost or late, and nothing may then be drawn or presented on it.
+     */
+    fun acquire(): Boolean
+
+    /** The texture the screen pass renders this frame's image into: the one taken by [acquire]. */
     fun getCurrentTexture(): GPUTexture
+
+    /** Gives back the texture taken by [acquire] without presenting it, where there is one: its frame was not finished. */
+    fun discard()
 
     fun getCurrentTextureView(): GPUTextureView
 

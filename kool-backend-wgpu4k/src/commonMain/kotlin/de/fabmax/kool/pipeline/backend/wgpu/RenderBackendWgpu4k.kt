@@ -45,9 +45,40 @@ abstract class RenderBackendWgpu4k(
     override val deviceCoordinates: DeviceCoordinates = DeviceCoordinates.WEB_GPU
     override lateinit var features: BackendFeatures; protected set
 
-    /** The window size the surface was last configured for. */
-    var renderSize = surface.size
+    /** The size the surface was last configured for; no size before it has been. */
+    var renderSize = Vec2i.ZERO
         private set
+
+    /**
+     * Whether the frame rendered last was drawn and presented: not where the surface had no area, or no texture to give
+     * (a window's surface out of date or lost, as while its window changes size), or the frame failed as it was drawn.
+     */
+    var isLastFramePresented = false
+        private set
+
+    /** How many frames were not drawn, the surface having no area or no texture to draw them into. */
+    var framesSkipped = 0
+        private set
+
+    /** How many times the GPU has refused something asked of it (a validation, memory or internal error), and the last. */
+    var uncapturedErrors = 0
+        private set
+    var lastUncapturedError: String? = null
+        private set
+
+    /**
+     * Told of whatever the GPU refuses. Such an error is written to the log and counted, and the frame goes on: left to
+     * the native library, it ends the process.
+     */
+    private fun refused(error: GPUError) {
+        try {
+            uncapturedErrors++
+            lastUncapturedError = error.message
+            logE { "The GPU refused: ${error.message}" }
+        } catch (_: Throwable) {
+            // Called from native code: nothing thrown may go back into it.
+        }
+    }
 
     override lateinit var device: GPUDevice
         protected set
@@ -98,7 +129,7 @@ abstract class RenderBackendWgpu4k(
             requiredFeatures.add(GPUFeatureName.RG11B10UfloatRenderable)
         }
 
-        val deviceDesc = DeviceDescriptor(requiredFeatures)
+        val deviceDesc = DeviceDescriptor(requiredFeatures, onUncapturedError = ::refused)
         device = adapter.requestDevice(deviceDesc)
             .getOrThrow()
 
@@ -124,12 +155,20 @@ abstract class RenderBackendWgpu4k(
 
         textureLoader = WgpuTextureLoader(this)
         logI { "WebGPU context created" }
-
-        configureSurface()
     }
 
-    /** Configures the surface for its present size: once the device is there, and again whenever the size changes. */
-    private fun configureSurface(size: Vec2i = surface.size) {
+    /**
+     * The surface's size now, no more either way than the device can make a texture: nothing where it has no area, as a
+     * minimized window's has none.
+     */
+    private fun surfaceSize(): Vec2i {
+        val most = device.limits.maxTextureDimension2D.toInt()
+        return surface.size.let { Vec2i(it.x.coerceIn(0, most), it.y.coerceIn(0, most)) }
+    }
+
+    /** Configures the surface for [size], which has an area: before its first frame, and again whenever its size changes. */
+    private fun configureSurface(size: Vec2i) {
+        renderSize = size
         surface.configure(
             SurfaceConfiguration(
                 device,
@@ -142,38 +181,61 @@ abstract class RenderBackendWgpu4k(
         )
     }
 
+    /**
+     * Takes the texture this frame is drawn into, the surface configured for its size now, and says whether there is one.
+     * The surface's textures keep the size it was configured for, and a window changes size on another thread: a surface
+     * that gives no texture is out of date or lost, and is configured once more for the size it has by then. Where it
+     * still gives none, or has no area, the frame is not drawn.
+     */
+    private fun acquireSurfaceTexture(): Boolean {
+        val size = surfaceSize()
+        if (size.x == 0 || size.y == 0) return false
+        if (size != renderSize) configureSurface(size)
+        if (surface.acquire()) return true
+        val now = surfaceSize()
+        if (now.x == 0 || now.y == 0) return false
+        configureSurface(now)
+        return surface.acquire()
+    }
+
     protected suspend fun renderFrameSuspending(frameData: FrameData, ctx: KoolContext) {
         BackendStats.resetPerFrameCounts()
-
-        // The surface's textures keep the size it was configured for: a resized window needs it configured again. The
-        // screen pass sizes its own attachments from the texture it is given, whatever size that is.
-        val windowSize = surface.size
-        if (windowSize != renderSize) {
-            renderSize = windowSize
-            configureSurface(windowSize)
+        isLastFramePresented = false
+        // Before anything is encoded: the screen pass sizes its own attachments from the texture it is given.
+        if (!acquireSurfaceTexture()) {
+            framesSkipped++
+            return
         }
+        try {
+            passEncoderState.beginFrame()
 
-        passEncoderState.beginFrame()
+            frameData.preparePipelines()
+            frameData.executePasses()
 
-        frameData.preparePipelines()
-        frameData.executePasses()
+            passEncoderState.ensureRenderPassInactive()
+            if (gpuReadbacks.isNotEmpty()) {
+                // copy all buffers requested for readback to temporary buffers using the current command encoder
+                copyReadbacks(passEncoderState.encoder)
+            }
+            timestampQuery.resolve(passEncoderState.encoder)
+            surface.encodeOutput(passEncoderState.encoder)
+            passEncoderState.endFrame()
 
-        passEncoderState.ensureRenderPassInactive()
-        if (gpuReadbacks.isNotEmpty()) {
-            // copy all buffers requested for readback to temporary buffers using the current command encoder
-            copyReadbacks(passEncoderState.encoder)
+            timestampQuery.readTimestamps()
+            if (gpuReadbacks.isNotEmpty()) {
+                // after encoder is finished and submitted, temp buffers can be mapped for readback
+                mapReadbacks()
+            }
+
+            surface.present()
+            isLastFramePresented = true
+        } finally {
+            // A frame that failed leaves nothing behind for the next: no pass open, no texture of the surface held.
+            if (!isLastFramePresented) {
+                passEncoderState.abandonFrame()
+                surface.discard()
+            }
         }
-        timestampQuery.resolve(passEncoderState.encoder)
-        surface.encodeOutput(passEncoderState.encoder)
-        passEncoderState.endFrame()
-
-        timestampQuery.readTimestamps()
-        if (gpuReadbacks.isNotEmpty()) {
-            // after encoder is finished and submitted, temp buffers can be mapped for readback
-            mapReadbacks()
-        }
-
-        surface.present()
     }
 
     private suspend fun FrameData.preparePipelines() {
