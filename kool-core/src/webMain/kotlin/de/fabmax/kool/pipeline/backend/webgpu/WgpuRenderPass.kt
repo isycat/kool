@@ -7,6 +7,7 @@ import de.fabmax.kool.pipeline.*
 import de.fabmax.kool.pipeline.backend.stats.BackendStats
 import de.fabmax.kool.util.BaseReleasable
 import de.fabmax.kool.util.releaseWith
+import kotlin.js.toJsNumber
 import kotlin.time.Duration.Companion.nanoseconds
 
 abstract class WgpuRenderPass(
@@ -122,7 +123,14 @@ abstract class WgpuRenderPass(
             val insts = cmd.instanceData
             val isCmdValid = cmd.isActive && cmd.vertexData.numIndices > 0 && (insts == null || insts.numInstances > 0)
             val bindSuccessful = isCmdValid && backend.pipelineManager.bindDrawPipeline(cmd, passEncoderState)
-            if (bindSuccessful) {
+            val indirect = cmd.mesh.indirectArgs
+            if (bindSuccessful && indirect != null) {
+                // The draw's arguments are where the GPU wrote them: nothing is drawn before the buffer is made.
+                (indirect.gpuBuffer as GpuBufferWgpu?)?.let {
+                    passEncoderState.passEncoder.drawIndexedIndirect(it.buffer, cmd.mesh.indirectOffset.toDouble().toJsNumber())
+                    BackendStats.addDrawCommands(1, 0)
+                }
+            } else if (bindSuccessful) {
                 if (insts == null) {
                     passEncoderState.passEncoder.drawIndexed(cmd.vertexData.numIndices)
                     BackendStats.addDrawCommands(1, cmd.vertexData.numPrimitives)

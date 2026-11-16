@@ -140,7 +140,9 @@ class WgpuBindGroupData(
                 GPUBufferDescriptor(
                     label = "bindGroup[${data.layout.scope}]-storage-${name}",
                     size = (storage.size * storage.type.byteSize).toJsNumber(),
-                    usage = GPUBufferUsage.STORAGE or GPUBufferUsage.COPY_SRC or GPUBufferUsage.COPY_DST
+                    // Written by a compute shader and read by a draw as its arguments, where its usage says.
+                    usage = GPUBufferUsage.STORAGE or GPUBufferUsage.COPY_SRC or GPUBufferUsage.COPY_DST or
+                        (if (storage.usage.isIndirect) GPUBufferUsage.INDIRECT else 0)
                 ),
                 "scene: ${pass.parentScene?.name}, render-pass: ${pass.name}"
             )

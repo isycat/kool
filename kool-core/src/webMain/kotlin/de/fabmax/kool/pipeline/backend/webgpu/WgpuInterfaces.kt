@@ -124,6 +124,7 @@ external class GPURenderPassEncoder : JsAny {
     fun setVertexBuffer(slot: Int, buffer: GPUBuffer, offset: JsNumber = definedExternally, size: JsNumber = definedExternally)
     fun draw(vertexCount: Int, instanceCount: Int = definedExternally, firstVertex: Int = definedExternally, firstInstance: Int = definedExternally)
     fun drawIndexed(indexCount: Int, instanceCount: Int = definedExternally, firstIndex: Int = definedExternally, baseVertex: Int = definedExternally, firstInstance: Int = definedExternally)
+    fun drawIndexedIndirect(indirectBuffer: GPUBuffer, indirectOffset: JsNumber)
     fun setBindGroup(index: Int, bindGroup: GPUBindGroup)
     fun setViewport(x: Float, y: Float, width: Float, height: Float, minDepth: Float, maxDepth: Float)
     fun setScissorRect(x: Int, y: Int, width: Int, height: Int)
