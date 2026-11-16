@@ -70,7 +70,7 @@ private suspend fun windowBackend(ctx: KoolContext, wgpu: WGPU, glfw: GlfwWindow
     // Get supported format and opacity on surface
     nativeSurface.computeSurfaceCapabilities(adapter)
 
-    return DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(WindowTarget(nativeSurface, glfwWindow)), KoolSystem.configJvm.numSamples) { adapter }
+    return DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(WindowTarget(nativeSurface, glfwWindow, nativeSurface.presentModes(adapter))), KoolSystem.configJvm.numSamples) { adapter }
 }
 
 /**
@@ -89,7 +89,7 @@ private suspend fun canvasBackend(ctx: KoolContext, wgpu: WGPU, swing: SwingWind
         val compatible = adapter ?: runBlocking { wgpu.requestAdapter(surface) }.also { adapter = it } ?: error("fail to get adapter")
         // Get supported format and opacity on surface
         surface.computeSurfaceCapabilities(compatible)
-        surface
+        surface to surface.presentModes(compatible)
     }
     return DesktopRenderBackendWgpu4kWebGpu(ctx, WgpuSurface(target), KoolSystem.configJvm.numSamples) { checkNotNull(adapter) }
 }

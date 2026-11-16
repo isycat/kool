@@ -7,10 +7,13 @@ import io.ygdrasil.webgpu.*
 import io.ygdrasil.wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal
 import io.ygdrasil.wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal
 import io.ygdrasil.wgpu.WGPUSurfaceGetCurrentTextureStatus_Timeout
+import io.ygdrasil.wgpu.WGPUSurfaceCapabilities
 import io.ygdrasil.wgpu.WGPUSurfaceTexture
+import io.ygdrasil.wgpu.wgpuSurfaceGetCapabilities
 import io.ygdrasil.wgpu.wgpuSurfaceGetCurrentTexture
 import io.ygdrasil.wgpu.wgpuTextureRelease
 import java.lang.foreign.MemorySegment
+import java.lang.foreign.ValueLayout
 
 /**
  * Where the screen pass renders to on the desktop: a window's surface ([WindowTarget]) or, in headless mode, an offscreen
@@ -20,6 +23,9 @@ internal interface SurfaceTarget : AutoCloseable {
     val window: KoolWindowJvm
     val format: GPUTextureFormat
     val supportedAlphaMode: Set<CompositeAlphaMode>
+
+    /** How the surface can present frames; none where it does not say, and it is presented as the library defaults to. */
+    val presentModes: Set<PresentMode> get() = emptySet()
 
     /**
      * The size of what frames are presented on, in pixels, now: what the surface must be configured for. A native
@@ -61,6 +67,20 @@ internal fun NativeSurface.currentTexture(): Pair<SurfaceAnswer, GPUTexture?> = 
     (if (given.status == WGPUSurfaceGetCurrentTextureStatus_Timeout) SurfaceAnswer.LATE else SurfaceAnswer.STALE) to null
 }
 
+/**
+ * How this surface can present frames with [adapter]'s GPU, as its capabilities list them. wgpu4k reads the
+ * capabilities for their formats and alpha modes alone. The lists the library allocates for them are not freed: the
+ * binding has no call for it, and this is asked once for each surface made.
+ */
+internal fun NativeSurface.presentModes(adapter: Adapter): Set<PresentMode> = memoryScope { scope ->
+    val capabilities = WGPUSurfaceCapabilities.allocate(scope)
+    wgpuSurfaceGetCapabilities(handler, adapter.handler, capabilities)
+    val count = capabilities.presentModeCount.toLong()
+    val listed = capabilities.presentModes?.handler?.takeIf { it != MemorySegment.NULL } ?: return@memoryScope emptySet()
+    val modes = listed.reinterpret(count * Int.SIZE_BYTES)
+    (0 until count).mapNotNull { PresentMode.of(modes.getAtIndex(ValueLayout.JAVA_INT, it).toUInt()) }.toSet()
+}
+
 actual class WgpuSurface internal constructor(internal val target: SurfaceTarget) : AutoCloseable {
     actual val width: UInt get() = size.x.coerceAtLeast(0).toUInt()
     actual val height: UInt get() = size.y.coerceAtLeast(0).toUInt()
@@ -68,6 +88,7 @@ actual class WgpuSurface internal constructor(internal val target: SurfaceTarget
 
     actual val supportedAlphaMode: Set<CompositeAlphaMode> get() = target.supportedAlphaMode
     actual val format: GPUTextureFormat get() = target.format
+    actual val presentModes: Set<PresentMode> get() = target.presentModes
 
     private var currentTextureView: GPUTextureView? = null
 
@@ -107,10 +128,12 @@ internal class FollowingTarget(
     override val window: KoolWindowJvm,
     private val handleOf: () -> Long,
     private val sizeOf: (Long) -> Vec2i?,
-    private val surfaceOf: (Long) -> NativeSurface,
+    private val surfaceOf: (Long) -> Pair<NativeSurface, Set<PresentMode>>,
 ) : SurfaceTarget {
     private var handle = handleOf()
-    private var handler = surfaceOf(handle)
+    private var made = surfaceOf(handle)
+    private val handler: NativeSurface get() = made.first
+    override val presentModes: Set<PresentMode> get() = made.second
     private var configured: Triple<SurfaceConfiguration, UInt, UInt>? = null
     private var currentTexture: GPUTexture? = null
 
@@ -123,7 +146,7 @@ internal class FollowingTarget(
             discard()
             handler.close()
             handle = now
-            handler = surfaceOf(now)
+            made = surfaceOf(now)
             configured?.let { (configuration, width, height) -> handler.configure(configuration, width, height) }
         }
         return handler
@@ -170,7 +193,11 @@ internal class FollowingTarget(
 }
 
 /** A window's surface: a GLFW window's. */
-internal class WindowTarget(private val handler: NativeSurface, override val window: KoolWindowJvm) : SurfaceTarget {
+internal class WindowTarget(
+    private val handler: NativeSurface,
+    override val window: KoolWindowJvm,
+    override val presentModes: Set<PresentMode> = emptySet(),
+) : SurfaceTarget {
 
     override val supportedAlphaMode: Set<CompositeAlphaMode> get() = handler.supportedAlphaMode
     override val format: GPUTextureFormat

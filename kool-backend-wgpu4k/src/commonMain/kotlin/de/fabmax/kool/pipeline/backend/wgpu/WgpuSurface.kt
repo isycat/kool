@@ -59,6 +59,9 @@ expect class WgpuSurface: AutoCloseable {
     val supportedAlphaMode: Set<CompositeAlphaMode>
     val format: GPUTextureFormat
 
+    /** How the surface can present frames, as its capabilities list them; none where it does not say. */
+    val presentModes: Set<PresentMode>
+
     /**
      * Takes the texture the next frame is drawn into, and says whether there is one: a window's surface has none to
      * give while it is out of date, lost or late, and nothing may then be drawn or presented on it.
