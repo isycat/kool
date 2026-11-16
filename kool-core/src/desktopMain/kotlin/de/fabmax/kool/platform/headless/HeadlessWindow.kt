@@ -107,6 +107,17 @@ class HeadlessWindow internal constructor(
     /** Whether this ask for a texture to draw into is one of those to refuse. */
     fun takeRefusal(): Boolean = refusals.getAndUpdate { (it - 1).coerceAtLeast(0) } > 0
 
+    private val delays = java.util.concurrent.atomic.AtomicInteger()
+
+    /**
+     * Has the next [count] asks for a texture to draw a frame into come back late with none, as a native window's
+     * surface does where nothing shows what it presents: for tests of how often a renderer then asks.
+     */
+    fun delayTextures(count: Int) = delays.set(count)
+
+    /** Whether this ask for a texture to draw into is one of those to answer late. */
+    fun takeDelay(): Boolean = delays.getAndUpdate { (it - 1).coerceAtLeast(0) } > 0
+
     override fun setSizeOnScreen(size: Vec2i) {
         setSize(Vec2i((size.x * parentScreenScale).roundToInt(), (size.y * parentScreenScale).roundToInt()))
     }

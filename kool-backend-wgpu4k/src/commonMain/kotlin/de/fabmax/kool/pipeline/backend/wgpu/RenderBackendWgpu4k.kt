@@ -25,6 +25,7 @@ import io.ygdrasil.webgpu.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.measureTimedValue
 
 internal expect fun isRenderBackendWgpu4kSupported(): Boolean
 
@@ -58,6 +59,10 @@ abstract class RenderBackendWgpu4k(
 
     /** How many frames were not drawn, the surface having no area or no texture to draw them into. */
     var framesSkipped = 0
+        private set
+
+    /** What asking the surface for each frame's texture has come to since this backend was made. */
+    var surfaceAsks = SurfaceAsks()
         private set
 
     /** How many times the GPU has refused something asked of it (a validation, memory or internal error), and the last. */
@@ -166,9 +171,16 @@ abstract class RenderBackendWgpu4k(
         return surface.size.let { Vec2i(it.x.coerceIn(0, most), it.y.coerceIn(0, most)) }
     }
 
-    /** Configures the surface for [size], which has an area: before its first frame, and again whenever its size changes. */
-    private fun configureSurface(size: Vec2i) {
+    /** Whether the surface was late with the texture it was last asked for. */
+    private var isSurfaceLate = false
+
+    /**
+     * Configures the surface for [size], which has an area: before its first frame, whenever its size changes, and
+     * [again] where it gave no texture as it was.
+     */
+    private fun configureSurface(size: Vec2i, again: Boolean = false) {
         renderSize = size
+        if (again) surfaceAsks = surfaceAsks.copy(configuredAgain = surfaceAsks.configuredAgain + 1)
         surface.configure(
             SurfaceConfiguration(
                 device,
@@ -181,21 +193,38 @@ abstract class RenderBackendWgpu4k(
         )
     }
 
+    /** Asks the surface for this frame's texture, counting the ask, its answer and how long it took. */
+    private fun askSurface(): SurfaceAnswer {
+        val (answer, took) = measureTimedValue { surface.acquire() }
+        surfaceAsks = surfaceAsks.asked(answer, took)
+        if (answer != SurfaceAnswer.GIVEN) logW { "The surface gave no texture: $answer after ${took.inWholeMilliseconds} ms" }
+        return answer
+    }
+
     /**
      * Takes the texture this frame is drawn into, the surface configured for its size now, and says whether there is one.
      * The surface's textures keep the size it was configured for, and a window changes size on another thread: a surface
-     * that gives no texture is out of date or lost, and is configured once more for the size it has by then. Where it
-     * still gives none, or has no area, the frame is not drawn.
+     * that gives no texture because it is out of date or lost is configured once more, for the size it has by then, and
+     * asked once more. One late with its texture has been waited on for as long as the library waits, and is not asked
+     * again in this frame: it is configured again before the next, as one that only then turns out to be out of date
+     * needs. Where it gives none, or has no area, the frame is not drawn.
      */
     private fun acquireSurfaceTexture(): Boolean {
         val size = surfaceSize()
         if (size.x == 0 || size.y == 0) return false
-        if (size != renderSize) configureSurface(size)
-        if (surface.acquire()) return true
+        if (size != renderSize || isSurfaceLate) configureSurface(size, again = isSurfaceLate)
+        val first = askSurface()
+        if (first != SurfaceAnswer.STALE) return taken(first)
         val now = surfaceSize()
         if (now.x == 0 || now.y == 0) return false
-        configureSurface(now)
-        return surface.acquire()
+        configureSurface(now, again = true)
+        return taken(askSurface())
+    }
+
+    /** Whether [answer], the surface's last in this frame, gave a texture; where it was late, the next frame knows. */
+    private fun taken(answer: SurfaceAnswer): Boolean {
+        isSurfaceLate = answer == SurfaceAnswer.LATE
+        return answer == SurfaceAnswer.GIVEN
     }
 
     protected suspend fun renderFrameSuspending(frameData: FrameData, ctx: KoolContext) {

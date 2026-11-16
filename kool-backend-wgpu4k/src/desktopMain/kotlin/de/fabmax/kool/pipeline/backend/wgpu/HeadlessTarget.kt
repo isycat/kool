@@ -45,8 +45,12 @@ internal class HeadlessTarget(
     /** The size the target was last configured for: as a window's surface does, its texture has that size, whatever the window's is now. */
     private var configuredSize = headless.framebufferSize
 
-    // The texture is this target's own: there is one for every frame, but for those a test has refused.
-    override fun acquire(): Boolean = !headless.takeRefusal()
+    // The texture is this target's own: there is one for every frame, but for those a test has refused or delayed.
+    override fun acquire(): SurfaceAnswer = when {
+        headless.takeRefusal() -> SurfaceAnswer.STALE
+        headless.takeDelay() -> SurfaceAnswer.LATE
+        else -> SurfaceAnswer.GIVEN
+    }
 
     override fun discard() { }
 

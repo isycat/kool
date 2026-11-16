@@ -21,7 +21,7 @@ actual class WgpuSurface(private val handler: WGPUCanvasContext) : AutoCloseable
             ?: error("WebGPU not supported")
 
     // A canvas always has a texture for the frame being drawn, and takes it back by itself.
-    actual fun acquire(): Boolean = true
+    actual fun acquire(): SurfaceAnswer = SurfaceAnswer.GIVEN
 
     actual fun getCurrentTexture(): GPUTexture = Texture(handler.getCurrentTexture(), canBeDestroy = false)
 

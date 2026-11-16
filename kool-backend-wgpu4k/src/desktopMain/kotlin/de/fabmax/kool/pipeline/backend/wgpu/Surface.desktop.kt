@@ -6,6 +6,7 @@ import ffi.memoryScope
 import io.ygdrasil.webgpu.*
 import io.ygdrasil.wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal
 import io.ygdrasil.wgpu.WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal
+import io.ygdrasil.wgpu.WGPUSurfaceGetCurrentTextureStatus_Timeout
 import io.ygdrasil.wgpu.WGPUSurfaceTexture
 import io.ygdrasil.wgpu.wgpuSurfaceGetCurrentTexture
 import io.ygdrasil.wgpu.wgpuTextureRelease
@@ -28,9 +29,10 @@ internal interface SurfaceTarget : AutoCloseable {
 
     /**
      * Takes the texture the next frame is drawn into, and says whether there is one: a window's surface has none to
-     * give while it is out of date (its window changed size since it was configured), lost, or late.
+     * give while it is out of date (its window changed size since it was configured, or went to another screen), lost,
+     * or late.
      */
-    fun acquire(): Boolean
+    fun acquire(): SurfaceAnswer
 
     /** The texture taken by [acquire]. */
     fun getCurrentTexture(): GPUTexture
@@ -43,24 +45,20 @@ internal interface SurfaceTarget : AutoCloseable {
 }
 
 /**
- * The texture the surface gives to draw the next frame into, or null where it gives none now: it is out of date, lost
- * or late. Asked of the native library itself: wgpu4k's own call hands back a texture made of a null pointer for such
- * a surface, and the first use of that ends the process (the crash of a window resized quickly on Vulkan, 2026-11-16).
+ * The texture the surface gives to draw the next frame into, or why it gives none now: it is late with it, or out of
+ * date or lost in whatever way. Asked of the native library itself: wgpu4k's own call hands back a texture made of a
+ * null pointer for such a surface, and the first use of that ends the process (the crash of a window resized quickly
+ * on Vulkan, 2026-11-16).
  */
-internal fun NativeSurface.currentTextureOrNull(): GPUTexture? = memoryScope { scope ->
+internal fun NativeSurface.currentTexture(): Pair<SurfaceAnswer, GPUTexture?> = memoryScope { scope ->
     val given = WGPUSurfaceTexture.allocate(scope)
     wgpuSurfaceGetCurrentTexture(handler, given)
     val texture = given.texture?.takeIf { it.handler.handler != MemorySegment.NULL }
     val usable = given.status == WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal ||
         given.status == WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal
-    when {
-        texture == null -> null
-        usable -> Texture(texture, "")
-        else -> {
-            wgpuTextureRelease(texture)
-            null
-        }
-    }
+    if (texture != null && usable) return@memoryScope SurfaceAnswer.GIVEN to Texture(texture, "")
+    texture?.let(::wgpuTextureRelease)
+    (if (given.status == WGPUSurfaceGetCurrentTextureStatus_Timeout) SurfaceAnswer.LATE else SurfaceAnswer.STALE) to null
 }
 
 actual class WgpuSurface internal constructor(internal val target: SurfaceTarget) : AutoCloseable {
@@ -73,7 +71,7 @@ actual class WgpuSurface internal constructor(internal val target: SurfaceTarget
 
     private var currentTextureView: GPUTextureView? = null
 
-    actual fun acquire(): Boolean = target.acquire()
+    actual fun acquire(): SurfaceAnswer = target.acquire()
 
     actual fun getCurrentTexture(): GPUTexture = target.getCurrentTexture()
 
@@ -137,9 +135,9 @@ internal class FollowingTarget(
             it.name.contains("8Unorm") && !it.name.contains("Srgb")
         } ?: handler.supportedFormats.first()
 
-    override fun acquire(): Boolean {
-        if (currentTexture == null) currentTexture = current().currentTextureOrNull()
-        return currentTexture != null
+    override fun acquire(): SurfaceAnswer {
+        if (currentTexture != null) return SurfaceAnswer.GIVEN
+        return current().currentTexture().also { (_, texture) -> currentTexture = texture }.first
     }
 
     override fun getCurrentTexture(): GPUTexture = checkNotNull(currentTexture) { "No texture was acquired for this frame" }
@@ -182,9 +180,9 @@ internal class WindowTarget(private val handler: NativeSurface, override val win
 
     private var currentTexture: GPUTexture? = null
 
-    override fun acquire(): Boolean {
-        if (currentTexture == null) currentTexture = handler.currentTextureOrNull()
-        return currentTexture != null
+    override fun acquire(): SurfaceAnswer {
+        if (currentTexture != null) return SurfaceAnswer.GIVEN
+        return handler.currentTexture().also { (_, texture) -> currentTexture = texture }.first
     }
 
     override fun getCurrentTexture(): GPUTexture = checkNotNull(currentTexture) { "No texture was acquired for this frame" }
