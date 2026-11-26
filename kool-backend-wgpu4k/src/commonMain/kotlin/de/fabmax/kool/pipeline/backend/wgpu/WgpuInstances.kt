@@ -28,6 +28,7 @@ class WgpuInstances(val instances: MeshInstanceList<*>, val backend: RenderBacke
         if (instances.modCount.isDirty(updateModCount)) {
             updateModCount = instances.modCount.count
             createdInstanceBuffer?.writeData(instances.instanceData.buffer)
+            if (instances.letsGoOnUpload) instances.letGo()
         }
     }
 

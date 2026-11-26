@@ -48,11 +48,28 @@ class MeshInstanceList<Layout: Struct>(val layout: Layout, initialSize: Int = 10
      * Number of instances.
      */
     var numInstances: Int
-        get() = instanceData.limit
+        get() = goneCount ?: instanceData.limit
         set(value) {
+            check(goneCount == null) { "The instances were let go once the GPU held them" }
             instanceData.limit = value
             incrementModCount()
         }
+
+    /**
+     * Whether the instance data is let go once the GPU holds it ([letGo]): for a list that never changes after it is
+     * drawn, so it is not held twice, once in memory and once on the GPU.
+     */
+    var letsGoOnUpload = false
+
+    /** How many instances the list held when it was let go, or null while it holds them. */
+    private var goneCount: Int? = null
+
+    /** Lets the instance data go, keeping its count: the GPU holds it, and the list may not change after. */
+    fun letGo() {
+        if (goneCount != null) return
+        goneCount = instanceData.limit
+        instanceData = StructBuffer(layout, 1)
+    }
     val maxInstances: Int get() = instanceData.capacity
 
     val modCount = ModCounter()
@@ -63,6 +80,7 @@ class MeshInstanceList<Layout: Struct>(val layout: Layout, initialSize: Int = 10
 
     @PublishedApi
     internal fun checkBufferSize(reqSpace: Int) {
+        check(goneCount == null) { "The instances were let go once the GPU held them" }
         if (reqSpace <= 0 || layout.structSize == 0) return
         val remaining = maxInstances - numInstances
         if (remaining < reqSpace) {

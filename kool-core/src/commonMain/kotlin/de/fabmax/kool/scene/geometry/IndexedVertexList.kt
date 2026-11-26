@@ -80,13 +80,35 @@ class IndexedVertexList<Layout: Struct>(
      * Number of vertices.
      */
     var numVertices: Int
-        get() = vertexData.limit
+        get() = goneCounts?.vertices ?: vertexData.limit
         set(value) {
+            checkHeld()
             vertexData.limit = value
             incrementModCount()
         }
 
-    val numIndices: Int get() = indices.position
+    val numIndices: Int get() = goneCounts?.indices ?: indices.position
+
+    /**
+     * Whether the vertices and indices are let go once the GPU holds them ([letGo]): for a list that never changes after
+     * it is drawn, so it is not held twice, once in memory and once on the GPU.
+     */
+    var letsGoOnUpload = false
+
+    private class Counts(val vertices: Int, val indices: Int)
+
+    /** How many vertices and indices the list held when it was let go, or null while it holds them. */
+    private var goneCounts: Counts? = null
+
+    /** Lets the vertices and indices go, keeping their counts and bounds: the GPU holds them, and the list may not change after. */
+    fun letGo() {
+        if (goneCounts != null) return
+        goneCounts = Counts(vertexData.limit, indices.position)
+        vertexData = StructBuffer(layout, capacity = 1)
+        indices = Uint32Buffer(1, true)
+    }
+
+    private fun checkHeld() = check(goneCounts == null) { "The vertices were let go once the GPU held them" }
     val numPrimitives: Int get() = primitiveType.getNumberOfPrimitives(numIndices)
     val lastIndex get() = numVertices - 1
 
@@ -117,6 +139,7 @@ class IndexedVertexList<Layout: Struct>(
     }
 
     fun checkBufferSize(reqSpace: Int) {
+        checkHeld()
         if (reqSpace <= 0 || layout.structSize == 0) return
         if (vertexData.remaining < reqSpace) {
             val newSize = increaseBufferSize(vertexData.capacity, reqSpace - vertexData.remaining, layout.structSize)
@@ -127,6 +150,7 @@ class IndexedVertexList<Layout: Struct>(
     }
 
     fun checkIndexSize(reqSpace: Int) {
+        checkHeld()
         if (reqSpace <= 0) return
         if (indices.remaining < reqSpace) {
             val newSize = increaseBufferSize(indices.capacity, reqSpace, 4)

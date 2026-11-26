@@ -36,6 +36,7 @@ class WgpuGeometry(val mesh: Mesh<*>, val vertexData: IndexedVertexList<*>, val 
             updateModCount = vertexData.modCount.count
             createdIndexBuffer.writeData(vertexData.indices)
             createdVertexBuffer?.writeData(vertexData.vertexData.buffer)
+            if (vertexData.letsGoOnUpload) vertexData.letGo()
         }
     }
 
