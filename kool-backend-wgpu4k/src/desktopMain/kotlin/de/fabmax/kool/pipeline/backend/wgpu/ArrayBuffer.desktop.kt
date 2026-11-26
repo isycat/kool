@@ -11,6 +11,13 @@ actual fun ArrayBuffer.writeInto(target: Buffer) {
         .copyFrom(asArrayBuffer())
 }
 
+/** Each row copied whole, memory to memory: a 4K picture's rows a byte at a time held the frames' thread for tens of ms. */
+actual fun ArrayBuffer.writeRowsInto(target: Uint8Buffer, row: Int, padded: Int, rows: Int) {
+    val from = asArrayBuffer()
+    val into = MemorySegment.ofBuffer(target.asNioBuffer())
+    for (r in 0 until rows) MemorySegment.copy(from, r.toLong() * padded, into, r.toLong() * row, row.toLong())
+}
+
 actual fun Buffer.asArrayBuffer(block: (ArrayBuffer) -> Unit) {
     this.asNioBuffer()
         .asArrayBuffer(block)

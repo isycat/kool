@@ -455,8 +455,6 @@ abstract class RenderBackendWgpu4k(
                 } else {
                     // The rows as copied, each padded, taken without their padding.
                     val rows = gpuTex.height * gpuTex.depth
-                    val all = Uint8Buffer(padded * rows)
-                    mapBuffer.getMappedRange().writeInto(all)
                     val bytes = dst as? Uint8Buffer
                     if (bytes == null) {
                         mapBuffer.unmap()
@@ -464,9 +462,7 @@ abstract class RenderBackendWgpu4k(
                         readback.deferred.completeExceptionally(IllegalStateException("Only 8-bit textures are read back with padded rows"))
                         return@onSuccess
                     }
-                    for (r in 0 until rows) {
-                        for (b in 0 until row) bytes[r * row + b] = all[r * padded + b]
-                    }
+                    mapBuffer.getMappedRange().writeRowsInto(bytes, row, padded, rows)
                 }
                 mapBuffer.unmap()
                 mapBuffer.close()

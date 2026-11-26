@@ -32,3 +32,5 @@ actual fun ArrayBuffer.asUIntArray(): UIntArray = Int32Array(this)
 actual fun Buffer.asArrayBuffer(block: (ArrayBuffer) -> Unit) {
     block(asArrayBuffer())
 }
+actual fun ArrayBuffer.writeRowsInto(target: Uint8Buffer, row: Int, padded: Int, rows: Int) =
+    writeRowsByteByByte(target, row, padded, rows)
