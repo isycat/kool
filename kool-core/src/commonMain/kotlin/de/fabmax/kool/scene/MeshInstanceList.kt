@@ -84,6 +84,14 @@ class MeshInstanceList<Layout: Struct>(val layout: Layout, initialSize: Int = 10
         addInstances(1) { buf -> buf.put(block) }
     }
 
+    /** Gives back the room the list grew past what it holds: it grows by doubling as it is filled. */
+    fun trimToSize() {
+        if (maxInstances <= numInstances) return
+        val newData = StructBuffer(layout, maxOf(1, numInstances))
+        newData.put(instanceData)
+        instanceData = newData
+    }
+
     fun clear() {
         if (numInstances == 0) {
             return

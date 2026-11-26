@@ -255,6 +255,19 @@ class IndexedVertexList<Layout: Struct>(
         modCount.reset(source.modCount)
     }
 
+    /**
+     * Gives back the room the lists grew past what they hold: they grow by doubling as they are filled, so a list kept
+     * after it is made may hold up to twice what it needs, and one of a few vertices the initial size.
+     */
+    fun trimToSize() {
+        if (vertexData.capacity > numVertices) {
+            val newData = StructBuffer(layout, capacity = maxOf(1, numVertices))
+            newData.put(vertexData)
+            vertexData = newData
+        }
+        if (indices.capacity > numIndices) increaseIndicesSize(maxOf(1, numIndices))
+    }
+
     fun clearIndices() {
         indices.clear()
         modCount.increment()
