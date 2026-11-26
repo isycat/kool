@@ -28,6 +28,7 @@ import ffi.NativeAddress
 import io.ygdrasil.webgpu.GPUAdapter
 import io.ygdrasil.webgpu.NativeSurface
 import io.ygdrasil.webgpu.WGPU
+import io.ygdrasil.webgpu.WGPUInstanceBackend
 import io.ygdrasil.webgpu.WGPU.Companion.createInstance
 import io.ygdrasil.wgpu.WGPUSurface
 import kotlinx.coroutines.runBlocking
@@ -45,7 +46,7 @@ internal actual fun isRenderBackendWgpu4kSupported(): Boolean = true
 
 internal actual suspend fun createRenderBackendWgpu4k(ctx: KoolContext): RenderBackendWgpu4k {
     LibraryLoader.load()
-    val wgpu = createInstance() ?: error("fail to wgpu instance")
+    val wgpu = createInstance(backendFromEnv()) ?: error("fail to wgpu instance")
     WgpuReport.instance = wgpu.handler.handler.handler
     return when (val subsystem = KoolSystem.configJvm.windowSubsystem) {
         is HeadlessWindowSubsystem -> headlessBackend(ctx, wgpu, subsystem)
@@ -53,6 +54,18 @@ internal actual suspend fun createRenderBackendWgpu4k(ctx: KoolContext): RenderB
         is SwingWindowSubsystem -> canvasBackend(ctx, wgpu, subsystem)
         else -> error("Wgpu backend requires the GLFW, the Swing or the headless window subsystem")
     }
+}
+
+/**
+ * The backend wgpu's own WGPU_BACKEND variable names (vulkan, dx12, metal, gl), as wgpu's applications read it; wgpu-native
+ * reads it for none of its own, so every backend is tried where it is unset or names another.
+ */
+private fun backendFromEnv(): WGPUInstanceBackend? = when (System.getenv("WGPU_BACKEND")?.trim()?.lowercase()) {
+    "vulkan", "vk" -> WGPUInstanceBackend.Vulkan
+    "dx12", "d3d12" -> WGPUInstanceBackend.DX12
+    "metal", "mtl" -> WGPUInstanceBackend.Metal
+    "gl", "gles", "opengl" -> WGPUInstanceBackend.GL
+    else -> null
 }
 
 private suspend fun windowBackend(ctx: KoolContext, wgpu: WGPU, glfw: GlfwWindowSubsystem): RenderBackendWgpu4k {
