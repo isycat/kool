@@ -406,11 +406,13 @@ fun <T: Struct> storage(
 context(program: KslProgram)
 inline fun <reified T: KslNumericType> storage(
     name: String,
-    size: Int? = null
+    size: Int? = null,
+    scope: BindGroupScope = BindGroupScope.PIPELINE,
 ): KslPrimitiveStorage<KslPrimitiveStorageType<T>> {
     val type = numericTypeForT<T>()
     val storage: KslStorage<*> = program.storageBuffers[name]
-        ?: KslPrimitiveStorage(name, KslPrimitiveStorageType(type), size).also { program.registerStorage(it) }
+        ?: KslPrimitiveStorage(name, KslPrimitiveStorageType(type), size, scope).also { program.registerStorage(it) }
+    check(storage.scope == scope) { "Existing storage buffer with name \"$name\" is bound in ${storage.scope}, not $scope" }
 
     check(storage is KslPrimitiveStorage<*> && storage.storageType.elemType == type) {
         "Existing storage buffer with name \"$name\" has not the expected type"

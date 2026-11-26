@@ -1,11 +1,17 @@
 package de.fabmax.kool.modules.ksl.lang
 
+import de.fabmax.kool.pipeline.BindGroupScope
 import de.fabmax.kool.util.Struct
 
+/**
+ * A storage buffer of a program, bound in [scope]: a pipeline's, or a mesh's own ([BindGroupScope.MESH]), so meshes
+ * drawn by one shader each read a buffer of their own.
+ */
 sealed class KslStorage<T: KslStorageType<*>>(
     name: String,
     val storageType: T,
-    val size: Int?
+    val size: Int?,
+    val scope: BindGroupScope = BindGroupScope.PIPELINE,
 ) : KslValue<T>(name, true) {
     val name: String
         get() = stateName
@@ -15,14 +21,14 @@ sealed class KslStorage<T: KslStorageType<*>>(
     internal var isAccessedAtomically = false
 }
 
-class KslStructStorage<T: Struct>(name: String, type: KslStruct<T>, size: Int?) :
-    KslStorage<KslStructStorageType<T>>(name, KslStructStorageType(type), size)
+class KslStructStorage<T: Struct>(name: String, type: KslStruct<T>, size: Int?, scope: BindGroupScope = BindGroupScope.PIPELINE) :
+    KslStorage<KslStructStorageType<T>>(name, KslStructStorageType(type), size, scope)
 {
     override val expressionType: KslStructStorageType<T> get() = storageType
 }
 
-class KslPrimitiveStorage<T: KslPrimitiveStorageType<*>>(name: String, storage: T, size: Int?) :
-    KslStorage<T>(name, storage, size)
+class KslPrimitiveStorage<T: KslPrimitiveStorageType<*>>(name: String, storage: T, size: Int?, scope: BindGroupScope = BindGroupScope.PIPELINE) :
+    KslStorage<T>(name, storage, size, scope)
 {
     override val expressionType: T get() = storageType
 }

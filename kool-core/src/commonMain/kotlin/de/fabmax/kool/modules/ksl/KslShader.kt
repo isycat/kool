@@ -292,12 +292,7 @@ private fun KslProgram.setupBindGroupLayoutTextures(bindGrpBuilder: BindGroupLay
 }
 
 private fun KslProgram.setupBindGroupLayoutStorage(bindGrpBuilder: BindGroupLayout.Builder) {
-    if (bindGrpBuilder.scope != BindGroupScope.PIPELINE) {
-        // todo: add bind group scope to ksl storage -> for now we use pipeline scope for all of them
-        return
-    }
-
-    storageBuffers.values.forEach { storage ->
+    storageBuffers.values.filter { it.scope == bindGrpBuilder.scope }.forEach { storage ->
         val storageStages = stages
             .filter { it.dependsOn(storage) }
             .map { it.type.pipelineStageType }
