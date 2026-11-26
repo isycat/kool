@@ -466,10 +466,12 @@ abstract class RenderBackendWgpu4k(
                 }
                 mapBuffer.unmap()
                 mapBuffer.close()
+                // An id of its own, not one hashed of every byte read back: that held the render thread as long as a copy.
+                val id = UniqueId.nextId("readback")
                 when (readback.texture) {
-                    is Texture1d -> readback.deferred.complete(BufferedImageData1d(dst, gpuTex.width, format))
-                    is Texture2d -> readback.deferred.complete(BufferedImageData2d(dst, gpuTex.width, gpuTex.height, format))
-                    is Texture3d -> readback.deferred.complete(BufferedImageData3d(dst, gpuTex.width, gpuTex.height, gpuTex.depth, format))
+                    is Texture1d -> readback.deferred.complete(BufferedImageData1d(dst, gpuTex.width, format, id))
+                    is Texture2d -> readback.deferred.complete(BufferedImageData2d(dst, gpuTex.width, gpuTex.height, format, id))
+                    is Texture3d -> readback.deferred.complete(BufferedImageData3d(dst, gpuTex.width, gpuTex.height, gpuTex.depth, format, id))
                     else -> readback.deferred.completeExceptionally(IllegalArgumentException("Unsupported texture type"))
                 }
             }
