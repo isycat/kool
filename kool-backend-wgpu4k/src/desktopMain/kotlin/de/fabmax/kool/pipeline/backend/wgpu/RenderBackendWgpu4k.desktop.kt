@@ -46,6 +46,7 @@ internal actual fun isRenderBackendWgpu4kSupported(): Boolean = true
 internal actual suspend fun createRenderBackendWgpu4k(ctx: KoolContext): RenderBackendWgpu4k {
     LibraryLoader.load()
     val wgpu = createInstance() ?: error("fail to wgpu instance")
+    WgpuReport.instance = wgpu.handler.handler.handler
     return when (val subsystem = KoolSystem.configJvm.windowSubsystem) {
         is HeadlessWindowSubsystem -> headlessBackend(ctx, wgpu, subsystem)
         is GlfwWindowSubsystem -> windowBackend(ctx, wgpu, subsystem)

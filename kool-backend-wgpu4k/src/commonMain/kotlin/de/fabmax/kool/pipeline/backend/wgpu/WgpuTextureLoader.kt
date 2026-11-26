@@ -308,7 +308,10 @@ internal class WgpuTextureLoader(val backend: GPUBackend) {
         fun generateMipLevels(texDesc: GPUTextureDescriptor, texture: GPUTexture) {
             val cmdEncoder = device.createCommandEncoder()
             generateMipLevels(texDesc, texture, cmdEncoder)
-            device.queue.submit(listOf(cmdEncoder.finish()))
+            val commands = cmdEncoder.finish()
+            device.queue.submit(listOf(commands))
+            commands.close()
+            cmdEncoder.close()
         }
 
         fun generateMipLevels(texDesc: GPUTextureDescriptor, texture: GPUTexture, cmdEncoder: GPUCommandEncoder) {

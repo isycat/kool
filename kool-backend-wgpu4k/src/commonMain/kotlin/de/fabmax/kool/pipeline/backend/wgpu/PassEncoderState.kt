@@ -84,9 +84,14 @@ class RenderPassEncoderState(val backend: RenderBackendWgpu4k): PassEncoderState
         if (isPassActive) {
             ensureRenderPassInactive()
         }
-        val cmdBuffer = encoder.finish()
+        val frameEncoder = encoder
+        val cmdBuffer = frameEncoder.finish()
         _encoder = null
         backend.device.queue.submit(listOf(cmdBuffer))
+        // Let go once submitted: wgpu keeps each command buffer and encoder the app holds, and with it, on D3D12, the
+        // driver's memory for its commands (tens of MB a frame, never given back).
+        cmdBuffer.close()
+        frameEncoder.close()
     }
 
     /**
@@ -101,6 +106,7 @@ class RenderPassEncoderState(val backend: RenderBackendWgpu4k): PassEncoderState
         _gpuRenderPass = null
         _renderPass = null
         _passEncoder = null
+        _encoder?.let { runCatching { it.close() } }
         _encoder = null
         mipLevel = 0
         layer = 0
