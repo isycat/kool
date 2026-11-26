@@ -20,8 +20,9 @@ class GpuBufferWgpu(val buffer: GPUBuffer, val size: Long, info: String?) :
      */
     val wholeSize: ULong? = size.toULong()
 
+    // Inside apply, a bare `size` is the info's own (0 until allocated), so every buffer counted as empty.
     private val bufferInfo = BufferInfo(buffer.label, info ?: "<none>").apply {
-        allocated(size)
+        allocated(this@GpuBufferWgpu.size)
     }
 
     override fun doRelease() {
