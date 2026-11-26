@@ -25,6 +25,17 @@ class WgpuBindGroupData(
     var bindGroup: GPUBindGroup? = null
         private set
 
+    // The samplers, views and bind group made for the bind group as it is now: let go when it is made again or
+    // released, else wgpu keeps every one ever made, and the driver its memory, for as long as the app runs.
+    private val owned = mutableListOf<AutoCloseable>()
+
+    private fun <T : AutoCloseable> T.owned(): T = also { owned += it }
+
+    private fun letGoOwned() {
+        owned.forEach { it.close() }
+        owned.clear()
+    }
+
     internal var checkFrame = -1
     internal var isCheckOk = false
 
@@ -83,6 +94,7 @@ class WgpuBindGroupData(
     }
 
     private fun createBindGroup(pass: GpuPass) {
+        letGoOwned()
         bufferBindings.forEach { it.gpuBuffer.release() }
         bufferBindings.clear()
         textureBindings.clear()
@@ -111,7 +123,7 @@ class WgpuBindGroupData(
             label = "bindGroup[${data.layout.scope}]",
             layout = gpuLayout,
             entries = bindGroupEntries
-        )
+        ).owned()
     }
 
     private fun BindGroupData.UniformBufferBindingData<*>.makeEntry(pass: GpuPass): GPUBindGroupEntry {
@@ -169,8 +181,8 @@ class WgpuBindGroupData(
 
         textureBindings += TextureBinding(this, loadedTex)
         return listOf(
-            BindGroupEntry(location.binding.toUInt(), sampler),
-            BindGroupEntry(location.binding.toUInt() + 1u, loadedTex.gpuTexture.createView(dimension = GPUTextureViewDimension.OneD))
+            BindGroupEntry(location.binding.toUInt(), sampler.owned()),
+            BindGroupEntry(location.binding.toUInt() + 1u, loadedTex.gpuTexture.createView(dimension = GPUTextureViewDimension.OneD).owned())
         )
     }
 
@@ -203,8 +215,8 @@ class WgpuBindGroupData(
 
         val texView = loadedTex.gpuTexture.createView(baseMipLevel = baseLevel, mipLevelCount = numLevelsSafe)
         return listOf(
-            BindGroupEntry(location.binding.toUInt(), sampler),
-            BindGroupEntry(location.binding.toUInt() + 1u, texView)
+            BindGroupEntry(location.binding.toUInt(), sampler.owned()),
+            BindGroupEntry(location.binding.toUInt() + 1u, texView.owned())
         )
     }
 
@@ -225,8 +237,8 @@ class WgpuBindGroupData(
 
         textureBindings += TextureBinding(this, loadedTex)
         return listOf(
-            BindGroupEntry(location.binding.toUInt(), sampler),
-            BindGroupEntry((location.binding + 1).toUInt(), loadedTex.gpuTexture.createView())
+            BindGroupEntry(location.binding.toUInt(), sampler.owned()),
+            BindGroupEntry((location.binding + 1).toUInt(), loadedTex.gpuTexture.createView().owned())
         )
     }
 
@@ -248,8 +260,8 @@ class WgpuBindGroupData(
 
         textureBindings += TextureBinding(this, loadedTex)
         return listOf(
-            BindGroupEntry(location.binding.toUInt(), sampler),
-            BindGroupEntry((location.binding + 1).toUInt(), loadedTex.gpuTexture.createView(dimension = GPUTextureViewDimension.Cube))
+            BindGroupEntry(location.binding.toUInt(), sampler.owned()),
+            BindGroupEntry((location.binding + 1).toUInt(), loadedTex.gpuTexture.createView(dimension = GPUTextureViewDimension.Cube).owned())
         )
     }
 
@@ -276,8 +288,8 @@ class WgpuBindGroupData(
 
         textureBindings += TextureBinding(this, loadedTex)
         return listOf(
-            BindGroupEntry(location.binding.toUInt(), sampler),
-            BindGroupEntry(location.binding.toUInt() + 1u, loadedTex.gpuTexture.createView(dimension = GPUTextureViewDimension.TwoDArray))
+            BindGroupEntry(location.binding.toUInt(), sampler.owned()),
+            BindGroupEntry(location.binding.toUInt() + 1u, loadedTex.gpuTexture.createView(dimension = GPUTextureViewDimension.TwoDArray).owned())
         )
     }
 
@@ -299,8 +311,8 @@ class WgpuBindGroupData(
 
         textureBindings += TextureBinding(this, loadedTex)
         return listOf(
-            BindGroupEntry(location.binding.toUInt(), sampler),
-            BindGroupEntry(location.binding.toUInt() + 1u, loadedTex.gpuTexture.createView(dimension = GPUTextureViewDimension.CubeArray))
+            BindGroupEntry(location.binding.toUInt(), sampler.owned()),
+            BindGroupEntry(location.binding.toUInt() + 1u, loadedTex.gpuTexture.createView(dimension = GPUTextureViewDimension.CubeArray).owned())
         )
     }
 
@@ -315,10 +327,12 @@ class WgpuBindGroupData(
             baseMipLevel = mipLevel.coerceAtMost(loadedTex.imageInfo.mipLevelCount.toInt() - 1),
             mipLevelCount = 1
         )
-        return BindGroupEntry(location.binding.toUInt(), texView)
+        return BindGroupEntry(location.binding.toUInt(), texView.owned())
     }
 
     override fun doRelease() {
+        letGoOwned()
+        bindGroup = null
         textureBindings.clear()
         bufferBindings.forEach { it.gpuBuffer.release() }
         bufferBindings.clear()

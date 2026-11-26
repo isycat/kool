@@ -194,6 +194,9 @@ sealed class WgpuPipeline(
             is WgpuDrawPipeline -> backend.pipelineManager.removeDrawPipeline(this)
             is WgpuComputePipeline -> backend.pipelineManager.removeComputePipeline(this)
         }
+        // Its own layouts, made for it alone: wgpu keeps every one the app has not let go of.
+        pipelineLayout.close()
+        bindGroupLayouts.forEach { it.close() }
         pipelineInfo.deleted()
     }
 }
