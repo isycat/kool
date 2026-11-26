@@ -117,6 +117,7 @@ abstract class RenderBackendWgpu4k(
 
     internal suspend fun initContext() {
         val adapter = adapterProvider()
+        adapter.info.let { logI { "wgpu adapter: ${it.description}, vendor ${it.vendor}, device ${it.device}, ${it.architecture}" } }
         val availableFeatures = mutableSetOf<GPUFeatureName>()
         adapter.features
             .forEach { feature -> availableFeatures.add(feature) }
