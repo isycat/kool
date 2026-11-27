@@ -77,6 +77,7 @@ class DrawQueue() {
                 queue.markDelete = true
                 deleteAny = true
             }
+            queue.commands.forEach { it.pooled() }
             commandPool.addAll(queue.commands)
             queue.commands.clear()
         }
@@ -139,6 +140,7 @@ class DrawQueue() {
         if (cmd.queue !== this) {
             throw IllegalArgumentException("DrawCommand does not belong to this DrawQueue")
         }
+        cmd.pooled()
         commandPool.add(cmd)
     }
 
